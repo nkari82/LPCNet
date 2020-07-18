@@ -24,6 +24,10 @@
    SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <math.h>
 #include <stdio.h>
 #include "nnet_data.h"
@@ -31,29 +35,14 @@
 #include "common.h"
 #include "arch.h"
 #include "lpcnet.h"
+#include "lpcnet_private.h"
 
-
-#define LPC_ORDER 16
 #define PREEMPH 0.85f
 
 #define PITCH_GAIN_FEATURE 37
 #define PDF_FLOOR 0.002
 
 #define FRAME_INPUT_SIZE (NB_FEATURES + EMBED_PITCH_OUT_SIZE)
-
-#define SAMPLE_INPUT_SIZE (2*EMBED_SIG_OUT_SIZE + EMBED_EXC_OUT_SIZE + FEATURE_DENSE2_OUT_SIZE)
-
-#define FEATURES_DELAY (FEATURE_CONV1_DELAY + FEATURE_CONV2_DELAY)
-struct LPCNetState {
-    NNetState nnet;
-    int last_exc;
-    float last_sig[LPC_ORDER];
-    float old_input[FEATURES_DELAY][FEATURE_CONV2_OUT_SIZE];
-    float old_lpc[FEATURES_DELAY][LPC_ORDER];
-    float old_gain[FEATURES_DELAY];
-    int frame_count;
-    float deemph_mem;
-};
 
 
 #if 0
@@ -67,7 +56,6 @@ static void print_vector(float *x, int N)
 
 void run_frame_network(LPCNetState *lpcnet, float *condition, float *gru_a_condition, const float *features, int pitch)
 {
-    int i;
     NNetState *net;
     float in[FRAME_INPUT_SIZE];
     float conv1_out[FEATURE_CONV1_OUT_SIZE];
@@ -81,7 +69,6 @@ void run_frame_network(LPCNetState *lpcnet, float *condition, float *gru_a_condi
     compute_conv1d(&feature_conv2, conv2_out, net->feature_conv2_state, conv1_out);
     celt_assert(FRAME_INPUT_SIZE == FEATURE_CONV2_OUT_SIZE);
     if (lpcnet->frame_count < FEATURES_DELAY) RNN_CLEAR(conv2_out, FEATURE_CONV2_OUT_SIZE);
-    for (i=0;i<FEATURE_CONV2_OUT_SIZE;i++) conv2_out[i] += lpcnet->old_input[FEATURES_DELAY-1][i];
     memmove(lpcnet->old_input[1], lpcnet->old_input[0], (FEATURES_DELAY-1)*FRAME_INPUT_SIZE*sizeof(in[0]));
     memcpy(lpcnet->old_input[0], in, FRAME_INPUT_SIZE*sizeof(in[0]));
     compute_dense(&feature_dense1, dense1_out, conv2_out);
@@ -106,20 +93,33 @@ void run_sample_network(NNetState *net, float *pdf, const float *condition, cons
     compute_mdense(&dual_fc, pdf, net->gru_b_state);
 }
 
-LPCNetState *lpcnet_create()
+LPCNET_EXPORT int lpcnet_get_size()
+{
+    return sizeof(LPCNetState);
+}
+
+LPCNET_EXPORT int lpcnet_init(LPCNetState *lpcnet)
+{
+    memset(lpcnet, 0, lpcnet_get_size());
+    lpcnet->last_exc = 128;
+    return 0;
+}
+
+
+LPCNET_EXPORT LPCNetState *lpcnet_create()
 {
     LPCNetState *lpcnet;
-    lpcnet = (LPCNetState *)calloc(sizeof(LPCNetState), 1);
-	lpcnet->last_exc = 128;
+    lpcnet = (LPCNetState *)calloc(lpcnet_get_size(), 1);
+    lpcnet_init(lpcnet);
     return lpcnet;
 }
 
-void lpcnet_destroy(LPCNetState *lpcnet)
+LPCNET_EXPORT void lpcnet_destroy(LPCNetState *lpcnet)
 {
     free(lpcnet);
 }
 
-void lpcnet_synthesize(LPCNetState *lpcnet, short *output, const float *features, int N)
+LPCNET_EXPORT void lpcnet_synthesize(LPCNetState *lpcnet, const float *features, short *output, int N)
 {
     int i;
     float condition[FEATURE_DENSE2_OUT_SIZE];
@@ -128,9 +128,7 @@ void lpcnet_synthesize(LPCNetState *lpcnet, short *output, const float *features
     float gru_a_condition[3*GRU_A_STATE_SIZE];
     int pitch;
     float pitch_gain;
-    /* FIXME: Remove this -- it's just a temporary hack to match the Python code. */
-    static int start = LPC_ORDER+1;
-    /* FIXME: Do proper rounding once the Python code rounds properly. */
+    /* Matches the Python code -- the 0.1 avoids rounding issues. */
     pitch = (int)floor(.1 + 50*features[36]+100);
     pitch_gain = lpcnet->old_gain[FEATURES_DELAY-1];
     memmove(&lpcnet->old_gain[1], &lpcnet->old_gain[0], (FEATURES_DELAY-1)*sizeof(lpcnet->old_gain[0]));
@@ -144,7 +142,7 @@ void lpcnet_synthesize(LPCNetState *lpcnet, short *output, const float *features
         RNN_CLEAR(output, N);
         return;
     }
-    for (i=start;i<N;i++)
+    for (i=0;i<N;i++)
     {
         int j;
         float pcm;
@@ -167,9 +165,42 @@ void lpcnet_synthesize(LPCNetState *lpcnet, short *output, const float *features
         if (pcm>32767) pcm = 32767;
         output[i] = (int)floor(.5 + pcm);
     }
-    start = 0;
 }
 
-#if 1
 
-#endif
+LPCNET_EXPORT int lpcnet_decoder_get_size()
+{
+  return sizeof(LPCNetDecState);
+}
+
+LPCNET_EXPORT int lpcnet_decoder_init(LPCNetDecState *st)
+{
+  memset(st, 0, lpcnet_decoder_get_size());
+  lpcnet_init(&st->lpcnet_state);
+  return 0;
+}
+
+LPCNET_EXPORT LPCNetDecState *lpcnet_decoder_create()
+{
+  LPCNetDecState *st;
+  st = malloc(lpcnet_decoder_get_size());
+  lpcnet_decoder_init(st);
+  return st;
+}
+
+LPCNET_EXPORT void lpcnet_decoder_destroy(LPCNetDecState *st)
+{
+  free(st);
+}
+
+LPCNET_EXPORT int lpcnet_decode(LPCNetDecState *st, const unsigned char *buf, short *pcm)
+{
+  int k;
+  float features[4][NB_TOTAL_FEATURES];
+  decode_packet(features, st->vq_mem, buf);
+  for (k=0;k<4;k++) {
+    lpcnet_synthesize(&st->lpcnet_state, features[k], &pcm[k*FRAME_SIZE], FRAME_SIZE);
+  }
+  return 0;
+}
+

@@ -39,133 +39,9 @@
 #include "arch.h"
 #include "celt_lpc.h"
 #include <assert.h>
+#include "lpcnet.h"
+#include "lpcnet_private.h"
 
-
-#define PITCH_MIN_PERIOD 32
-#define PITCH_MAX_PERIOD 256
-#define PITCH_FRAME_SIZE 320
-#define PITCH_BUF_SIZE (PITCH_MAX_PERIOD+PITCH_FRAME_SIZE)
-
-#define CEPS_MEM 8
-#define NB_DELTA_CEPS 6
-
-#define NB_FEATURES (2*NB_BANDS+3+LPC_ORDER)
-
-
-typedef struct {
-  float analysis_mem[OVERLAP_SIZE];
-  float cepstral_mem[CEPS_MEM][NB_BANDS];
-  float pitch_buf[PITCH_BUF_SIZE];
-  float last_gain;
-  int last_period;
-  float lpc[LPC_ORDER];
-  float sig_mem[LPC_ORDER];
-  int exc_mem;
-} DenoiseState;
-
-static int rnnoise_get_size() {
-  return sizeof(DenoiseState);
-}
-
-static int rnnoise_init(DenoiseState *st) {
-  memset(st, 0, sizeof(*st));
-  return 0;
-}
-
-static DenoiseState *rnnoise_create() {
-  DenoiseState *st;
-  st = malloc(rnnoise_get_size());
-  rnnoise_init(st);
-  return st;
-}
-
-static void rnnoise_destroy(DenoiseState *st) {
-  free(st);
-}
-
-static short float2short(float x)
-{
-  int i;
-  i = (int)floor(.5+x);
-  return IMAX(-32767, IMIN(32767, i));
-}
-
-int lowpass = FREQ_SIZE;
-int band_lp = NB_BANDS;
-
-static void frame_analysis(DenoiseState *st, kiss_fft_cpx *X, float *Ex, const float *in) {
-  int i;
-  float x[WINDOW_SIZE];
-  RNN_COPY(x, st->analysis_mem, OVERLAP_SIZE);
-  RNN_COPY(&x[OVERLAP_SIZE], in, FRAME_SIZE);
-  RNN_COPY(st->analysis_mem, &in[FRAME_SIZE-OVERLAP_SIZE], OVERLAP_SIZE);
-  apply_window(x);
-  forward_transform(X, x);
-  for (i=lowpass;i<FREQ_SIZE;i++)
-    X[i].r = X[i].i = 0;
-  compute_band_energy(Ex, X);
-}
-
-static void compute_frame_features(DenoiseState *st, kiss_fft_cpx *X, kiss_fft_cpx *P,
-                                  float *Ex, float *Ep, float *Exp, float *features, const float *in) {
-  int i;
-  float E = 0;
-  float Ly[NB_BANDS];
-  float p[WINDOW_SIZE];
-  float pitch_buf[PITCH_BUF_SIZE];
-  int pitch_index;
-  float gain;
-  float tmp[NB_BANDS];
-  float follow, logMax;
-  float g;
-  frame_analysis(st, X, Ex, in);
-  RNN_MOVE(st->pitch_buf, &st->pitch_buf[FRAME_SIZE], PITCH_BUF_SIZE-FRAME_SIZE);
-  RNN_COPY(&st->pitch_buf[PITCH_BUF_SIZE-FRAME_SIZE], in, FRAME_SIZE);
-  RNN_COPY(pitch_buf, &st->pitch_buf[0], PITCH_BUF_SIZE);
-  pitch_downsample(pitch_buf, PITCH_BUF_SIZE);
-  pitch_search(pitch_buf+PITCH_MAX_PERIOD, pitch_buf, PITCH_FRAME_SIZE<<1,
-               (PITCH_MAX_PERIOD-3*PITCH_MIN_PERIOD)<<1, &pitch_index);
-  pitch_index = 2*PITCH_MAX_PERIOD-pitch_index;
-  gain = remove_doubling(pitch_buf, 2*PITCH_MAX_PERIOD, 2*PITCH_MIN_PERIOD,
-          2*PITCH_FRAME_SIZE, &pitch_index, st->last_period, st->last_gain);
-  st->last_period = pitch_index;
-  st->last_gain = gain;
-  for (i=0;i<WINDOW_SIZE;i++)
-    p[i] = st->pitch_buf[PITCH_BUF_SIZE-WINDOW_SIZE-pitch_index/2+i];
-  apply_window(p);
-  forward_transform(P, p);
-  compute_band_energy(Ep, P);
-  compute_band_corr(Exp, X, P);
-  for (i=0;i<NB_BANDS;i++) Exp[i] = Exp[i]/sqrt(.001+Ex[i]*Ep[i]);
-  dct(tmp, Exp);
-  for (i=0;i<NB_BANDS;i++) features[NB_BANDS+i] = tmp[i];
-  features[NB_BANDS] -= 1.3;
-  features[NB_BANDS+1] -= 0.9;
-  logMax = -2;
-  follow = -2;
-  for (i=0;i<NB_BANDS;i++) {
-    Ly[i] = log10(1e-2+Ex[i]);
-    Ly[i] = MAX16(logMax-8, MAX16(follow-2.5, Ly[i]));
-    logMax = MAX16(logMax, Ly[i]);
-    follow = MAX16(follow-2.5, Ly[i]);
-    E += Ex[i];
-  }
-  dct(features, Ly);
-  features[0] -= 4;
-  g = lpc_from_cepstrum(st->lpc, features);
-#if 0
-  for (i=0;i<NB_BANDS;i++) printf("%f ", Ly[i]);
-  printf("\n");
-#endif
-  features[2*NB_BANDS] = .01*(pitch_index-200);
-  features[2*NB_BANDS+1] = gain;
-  features[2*NB_BANDS+2] = log10(g);
-  for (i=0;i<LPC_ORDER;i++) features[2*NB_BANDS+3+i] = st->lpc[i];
-#if 0
-  for (i=0;i<NB_FEATURES;i++) printf("%f ", features[i]);
-  printf("\n");
-#endif
-}
 
 static void biquad(float *y, float mem[2], const float *x, const float *b, const float *a, int N) {
   int i;
@@ -175,16 +51,6 @@ static void biquad(float *y, float mem[2], const float *x, const float *b, const
     yi = x[i] + mem[0];
     mem[0] = mem[1] + (b[0]*(double)xi - a[0]*(double)yi);
     mem[1] = (b[1]*(double)xi - a[1]*(double)yi);
-    y[i] = yi;
-  }
-}
-
-static void preemphasis(float *y, float *mem, const float *x, float coef, int N) {
-  int i;
-  for (i=0;i<N;i++) {
-    float yi;
-    yi = x[i] + *mem;
-    *mem = -coef*x[i];
     y[i] = yi;
   }
 }
@@ -200,16 +66,24 @@ static void rand_resp(float *a, float *b) {
   b[1] = .75*uni_rand();
 }
 
-void write_audio(DenoiseState *st, const short *pcm, float noise_std, FILE *file) {
+void compute_noise(int *noise, float noise_std) {
   int i;
+  for (i=0;i<FRAME_SIZE;i++) {
+    noise[i] = (int)floor(.5 + noise_std*.707*(log_approx((float)rand()/RAND_MAX)-log_approx((float)rand()/RAND_MAX)));
+  }
+}
+
+
+void write_audio(LPCNetEncState *st, const short *pcm, const int *noise, FILE *file) {
+  int i, k;
+  for (k=0;k<4;k++) {
   unsigned char data[4*FRAME_SIZE];
   for (i=0;i<FRAME_SIZE;i++) {
-    int noise;
     float p=0;
     float e;
     int j;
-    for (j=0;j<LPC_ORDER;j++) p -= st->lpc[j]*st->sig_mem[j];
-    e = lin2ulaw(pcm[i] - p);
+    for (j=0;j<LPC_ORDER;j++) p -= st->features[k][2*NB_BANDS+3+j]*st->sig_mem[j];
+    e = lin2ulaw(pcm[k*FRAME_SIZE+i] - p);
     /* Signal. */
     data[4*i] = lin2ulaw(st->sig_mem[0]);
     /* Prediction. */
@@ -219,8 +93,7 @@ void write_audio(DenoiseState *st, const short *pcm, float noise_std, FILE *file
     /* Excitation out. */
     data[4*i+3] = e;
     /* Simulate error on excitation. */
-    noise = (int)floor(.5 + noise_std*.707*(log_approx((float)rand()/RAND_MAX)-log_approx((float)rand()/RAND_MAX)));
-    e += noise;
+    e += noise[k*FRAME_SIZE+i];
     e = IMIN(255, IMAX(0, e));
     
     RNN_MOVE(&st->sig_mem[1], &st->sig_mem[0], LPC_ORDER-1);
@@ -228,6 +101,14 @@ void write_audio(DenoiseState *st, const short *pcm, float noise_std, FILE *file
     st->exc_mem = e;
   }
   fwrite(data, 4*FRAME_SIZE, 1, file);
+  }
+}
+
+static short float2short(float x)
+{
+  int i;
+  i = (int)floor(.5+x);
+  return IMAX(-32767, IMIN(32767, i));
 }
 
 int main(int argc, char **argv) {
@@ -246,18 +127,40 @@ int main(int argc, char **argv) {
   FILE *ffeat;
   FILE *fpcm=NULL;
   short pcm[FRAME_SIZE]={0};
+  short pcmbuf[FRAME_SIZE*4]={0};
+  int noisebuf[FRAME_SIZE*4]={0};
   short tmp[FRAME_SIZE] = {0};
   float savedX[FRAME_SIZE] = {0};
   float speech_gain=1;
   int last_silent = 1;
   float old_speech_gain = 1;
   int one_pass_completed = 0;
-  DenoiseState *st;
+  LPCNetEncState *st;
   float noise_std=0;
   int training = -1;
-  st = rnnoise_create();
+  int encode = 0;
+  int decode = 0;
+  int quantize = 0;
+  st = lpcnet_encoder_create();
   if (argc == 5 && strcmp(argv[1], "-train")==0) training = 1;
+  if (argc == 5 && strcmp(argv[1], "-qtrain")==0) {
+      training = 1;
+      quantize = 1;
+  }
   if (argc == 4 && strcmp(argv[1], "-test")==0) training = 0;
+  if (argc == 4 && strcmp(argv[1], "-qtest")==0) {
+      training = 0;
+      quantize = 1;
+  }
+  if (argc == 4 && strcmp(argv[1], "-encode")==0) {
+      training = 0;
+      quantize = 1;
+      encode = 1;
+  }
+  if (argc == 4 && strcmp(argv[1], "-decode")==0) {
+      training = 0;
+      decode = 1;
+  }
   if (training == -1) {
     fprintf(stderr, "usage: %s -train <speech> <features out> <pcm out>\n", argv[0]);
     fprintf(stderr, "  or   %s -test <speech> <features out>\n", argv[0]);
@@ -273,6 +176,23 @@ int main(int argc, char **argv) {
     fprintf(stderr,"Error opening output feature file: %s\n", argv[3]);
     exit(1);
   }
+  if (decode) {
+    float vq_mem[NB_BANDS] = {0};
+    while (1) {
+      int ret;
+      unsigned char buf[8];
+      float features[4][NB_TOTAL_FEATURES];
+      //int c0_id, main_pitch, modulation, corr_id, vq_end[3], vq_mid, interp_id;
+      //ret = fscanf(f1, "%d %d %d %d %d %d %d %d %d\n", &c0_id, &main_pitch, &modulation, &corr_id, &vq_end[0], &vq_end[1], &vq_end[2], &vq_mid, &interp_id);
+      ret = fread(buf, 1, 8, f1);
+      if (ret != 8) break;
+      decode_packet(features, vq_mem, buf);
+      for (i=0;i<4;i++) {
+        fwrite(features[i], sizeof(float), NB_TOTAL_FEATURES, ffeat);
+      }
+    }
+    return 0;
+  }
   if (training) {
     fpcm = fopen(argv[4], "w");
     if (fpcm == NULL) {
@@ -281,11 +201,7 @@ int main(int argc, char **argv) {
     }
   }
   while (1) {
-    kiss_fft_cpx X[FREQ_SIZE], P[WINDOW_SIZE];
-    float Ex[NB_BANDS], Ep[NB_BANDS];
-    float Exp[NB_BANDS];
     float features[NB_FEATURES];
-    float taco_features[NB_BANDS+2];
     float E=0;
     int silent;
     for (i=0;i<FRAME_SIZE;i++) x[i] = tmp[i];
@@ -314,7 +230,7 @@ int main(int argc, char **argv) {
       }
       last_silent = silent;
     }
-    if (count>=5000000 && one_pass_completed) break;
+    if (count*FRAME_SIZE_5MS>=10000000 && one_pass_completed) break;
     if (training && ++gain_change_count > 2821) {
       float tmp;
       speech_gain = pow(10., (-20+(rand()%40))/20.);
@@ -323,7 +239,7 @@ int main(int argc, char **argv) {
       gain_change_count = 0;
       rand_resp(a_sig, b_sig);
       tmp = (float)rand()/RAND_MAX;
-      noise_std = 4*tmp*tmp;
+      noise_std = 10*tmp*tmp;
     }
     biquad(x, mem_hp_x, x, b_hp, a_hp, FRAME_SIZE);
     biquad(x, mem_resp_x, x, b_sig, a_sig, FRAME_SIZE);
@@ -336,19 +252,27 @@ int main(int argc, char **argv) {
     }
     for (i=0;i<FRAME_SIZE;i++) x[i] += rand()/(float)RAND_MAX - .5;
     compute_frame_features(st, X, P, Ex, Ep, Exp, features, x);
-#ifndef TACOTRON2
     fwrite(features, sizeof(float), NB_FEATURES, ffeat);
-#else
-	  for (i=0; i < NB_BANDS; i++) {
-	    taco_features[i] = features[i];
-	  }
-	  taco_features[NB_BANDS]=features[36];
-	  taco_features[NB_BANDS+1]=features[37];
-    fwrite(taco_features, sizeof(float), (NB_BANDS+2), ffeat);
+#ifdef TACOTRON2
+	fwrite(features[36], sizeof(float), 1, ffeat);
+	fwrite(features[37], sizeof(float), 1, ffeat);
 #endif
     /* PCM is delayed by 1/2 frame to make the features centered on the frames. */
     for (i=0;i<FRAME_SIZE-TRAINING_OFFSET;i++) pcm[i+TRAINING_OFFSET] = float2short(x[i]);
-    if (fpcm) write_audio(st, pcm, noise_std, fpcm);
+    compute_frame_features(st, x);
+
+    RNN_COPY(&pcmbuf[st->pcount*FRAME_SIZE], pcm, FRAME_SIZE);
+    if (fpcm) {
+        compute_noise(&noisebuf[st->pcount*FRAME_SIZE], noise_std);
+    }
+    st->pcount++;
+    /* Running on groups of 4 frames. */
+    if (st->pcount == 4) {
+      unsigned char buf[8];
+      process_superframe(st, buf, ffeat, encode, quantize);
+      if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
+      st->pcount = 0;
+    }
     //if (fpcm) fwrite(pcm, sizeof(short), FRAME_SIZE, fpcm);
     for (i=0;i<TRAINING_OFFSET;i++) pcm[i] = float2short(x[i+FRAME_SIZE-TRAINING_OFFSET]);
     old_speech_gain = speech_gain;
@@ -357,7 +281,7 @@ int main(int argc, char **argv) {
   fclose(f1);
   fclose(ffeat);
   if (fpcm) fclose(fpcm);
-  rnnoise_destroy(st);
+  lpcnet_encoder_destroy(st);
   return 0;
 }
 

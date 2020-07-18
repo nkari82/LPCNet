@@ -63,6 +63,7 @@ int main(int argc, char **argv) {
         if (feof(fin)) break;
         RNN_COPY(features, in_features, NB_FEATURES);
         RNN_CLEAR(&features[18], 18);
+        lpcnet_synthesize(net, pcm, features, FRAME_SIZE);
 #else
         float in_features[NB_BANDS+2];
         fread(in_features, sizeof(features[0]), NB_BANDS+2, fin);
@@ -71,8 +72,7 @@ int main(int argc, char **argv) {
         RNN_CLEAR(&features[18], 18);
         RNN_COPY(features+36, in_features+NB_BANDS, 2);
 #endif
-        lpcnet_synthesize(net, pcm, features, FRAME_SIZE);
-        fwrite(pcm, sizeof(pcm[0]), FRAME_SIZE, fout);
+	lpcnet_synthesize(net, features, pcm, FRAME_SIZE);        fwrite(pcm, sizeof(pcm[0]), FRAME_SIZE, fout);
     }
     fclose(fin);
     fclose(fout);
