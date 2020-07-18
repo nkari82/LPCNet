@@ -21,7 +21,14 @@ This software is an open source starting point for WaveRNN-based speech synthesi
 __NOTE__: The repo aims to work with Tacotron2.
 
 # Quickstart
-
+0. Compile
+	You can build the code using:
+	```
+	./autogen.sh
+	./configure
+	export CFLAGS=-DTACOTRON2
+	make
+	```
 1. Set up a Keras system with GPU.
 
 1. Generate training data:
