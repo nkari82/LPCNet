@@ -58,6 +58,10 @@ typedef struct LPCNetDecState LPCNetDecState;
 
 typedef struct LPCNetEncState LPCNetEncState;
 
+#if defined(__cplusplus)
+extern "C"
+{
+#endif
 
 /** Gets the size of an <code>LPCNetDecState</code> structure.
   * @returns The size in bytes.
@@ -167,4 +171,7 @@ LPCNET_EXPORT void lpcnet_destroy(LPCNetState *st);
   */
 LPCNET_EXPORT void lpcnet_synthesize(LPCNetState *st, const float *features, short *output, int N);
 
+#if defined(__cplusplus)
+}
+#endif
 #endif

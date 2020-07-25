@@ -164,7 +164,11 @@ static void sgemv_accum16(float *out, const float *weights, int rows, int cols, 
    int i, j;
    for (i=0;i<rows;i+=16)
    {
+#if defined(_MSC_VER )
+       float *  __restrict y;
+#else
       float * restrict y;
+#endif
       __m256 vy0, vy8;
       y = &out[i];
       vy0 = _mm256_loadu_ps(&y[0]);
@@ -190,7 +194,11 @@ static void sparse_sgemv_accum16(float *out, const float *weights, int rows, con
    int i, j;
    for (i=0;i<rows;i+=16)
    {
+#if defined(_MSC_VER)
+      float * __restrict y;
+#else
       float * restrict y;
+#endif
       int cols;
       __m256 vy0, vy8;
       y = &out[i];

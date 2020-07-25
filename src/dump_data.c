@@ -254,8 +254,8 @@ int main(int argc, char **argv) {
     compute_frame_features(st, X, P, Ex, Ep, Exp, features, x);
     fwrite(features, sizeof(float), NB_FEATURES, ffeat);
 #ifdef TACOTRON2
-	fwrite(features[36], sizeof(float), 1, ffeat);
-	fwrite(features[37], sizeof(float), 1, ffeat);
+	fwrite(features + 36, sizeof(float), 1, ffeat);
+	fwrite(features + 37, sizeof(float), 1, ffeat);
 #endif
     /* PCM is delayed by 1/2 frame to make the features centered on the frames. */
     for (i=0;i<FRAME_SIZE-TRAINING_OFFSET;i++) pcm[i+TRAINING_OFFSET] = float2short(x[i]);

@@ -42,6 +42,10 @@
 
 #define SQUARE(x) ((x)*(x))
 
+#if !defined(M_PI)
+#define M_PI 3.14159265358979323846
+#endif
+
 static const opus_int16 eband5ms[] = {
 /*0  200 400 600 800  1k 1.2 1.4 1.6  2k 2.4 2.8 3.2  4k 4.8 5.6 6.8  8k*/
   0,  1,  2,  3,  4,  5,  6,  7,  8, 10, 12, 14, 16, 20, 24, 28, 34, 40
