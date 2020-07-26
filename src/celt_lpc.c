@@ -101,7 +101,7 @@ void celt_fir(
 {
    int i,j;
 #if defined(_MSC_VER)
-   opus_val16* rnum = (opus_val16*)_alloca(ord * sizeof(opus_val16));
+   opus_val16* rnum = (opus_val16*)_malloca(ord * sizeof(opus_val16));
 #else
    opus_val16 rnum[ord];
 #endif
@@ -127,6 +127,9 @@ void celt_fir(
          sum = MAC16_16(sum,rnum[j],x[i+j-ord]);
       y[i] = ROUND16(sum, SIG_SHIFT);
    }
+#if defined(_MSC_VER)
+   _freea(rnum);
+#endif
 }
 
 void celt_iir(const opus_val32 *_x,
@@ -156,8 +159,8 @@ void celt_iir(const opus_val32 *_x,
    int i,j;
    celt_assert((ord&3)==0);
 #if defined(_MSC_VER)
-   opus_val16* rden = (opus_val16*)_alloca(ord * sizeof(opus_val16));
-   opus_val16* y = (opus_val16*)_alloca((N + ord) * sizeof(opus_val16));
+   opus_val16* rden = (opus_val16*)_malloca(ord * sizeof(opus_val16));
+   opus_val16* y = (opus_val16*)_malloca((N + ord) * sizeof(opus_val16));
 #else
    opus_val16 rden[ord];
    opus_val16 y[N + ord];
@@ -206,6 +209,11 @@ void celt_iir(const opus_val32 *_x,
    }
    for(i=0;i<ord;i++)
       mem[i] = _y[N-i-1];
+
+#if defined(_MSC_VER)
+   _freea(rden);
+   _freea(y);
+#endif
 #endif
 }
 
@@ -223,7 +231,7 @@ int _celt_autocorr(
    int shift;
    const opus_val16 *xptr;
 #if defined(_MSC_VER)
-   opus_val16* xx = (opus_val16*)_alloca(n * sizeof(opus_val16));
+   opus_val16* xx = (opus_val16*)_malloca(n * sizeof(opus_val16));
 #else
    opus_val16 xx[n];
 #endif
@@ -251,5 +259,9 @@ int _celt_autocorr(
          d = MAC16_16(d, xptr[i], xptr[i-k]);
       ac[k] += d;
    }
+
+#if defined(_MSC_VER)
+   _freea(xx);
+#endif
    return shift;
 }

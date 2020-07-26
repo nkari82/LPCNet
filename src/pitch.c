@@ -276,9 +276,9 @@ void pitch_search(const opus_val16 *x_lp, opus_val16 *y,
    lag = len+max_pitch;
 
 #if defined(_MSC_VER)
-   opus_val16* x_lp4 = (opus_val16*)_alloca((len >> 2) * sizeof(opus_val16));
-   opus_val16* y_lp4 = (opus_val16*)_alloca((len >> 2) * sizeof(opus_val16));
-   opus_val32* xcorr = (opus_val32*)_alloca((max_pitch >> 1) * sizeof(opus_val32));
+   opus_val16* x_lp4 = (opus_val16*)_malloca((len >> 2) * sizeof(opus_val16));
+   opus_val16* y_lp4 = (opus_val16*)_malloca((len >> 2) * sizeof(opus_val16));
+   opus_val32* xcorr = (opus_val32*)_malloca((max_pitch >> 1) * sizeof(opus_val32));
 #else
    opus_val16 x_lp4[len>>2];
    opus_val16 y_lp4[lag>>2];
@@ -366,6 +366,12 @@ void pitch_search(const opus_val16 *x_lp, opus_val16 *y,
       offset = 0;
    }
    *pitch = 2*best_pitch[0]-offset;
+
+#if defined(_MSC_VER)
+   _freea(x_lp4);
+   _freea(y_lp4);
+   _freea(xcorr);
+#endif
 }
 
 #ifdef FIXED_POINT
@@ -428,7 +434,7 @@ opus_val16 remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
 
    T = T0 = *T0_;
 #if defined(_MSC_VER)
-   opus_val32* yy_lookup = (opus_val16*)_alloca((maxperiod + 1) * sizeof(opus_val32));
+   opus_val32* yy_lookup = (opus_val32*)_malloca((maxperiod + 1) * sizeof(opus_val32));
 #else
    opus_val32 yy_lookup[maxperiod+1];
 #endif
@@ -511,5 +517,9 @@ opus_val16 remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
 
    if (*T0_<minperiod0)
       *T0_=minperiod0;
+
+#if defined(_MSC_VER)
+   _freea(yy_lookup);
+#endif
    return pg;
 }
