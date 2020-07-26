@@ -147,8 +147,7 @@ static void celt_fir5(const opus_val16 *x,
 
 
 void pitch_downsample(opus_val16 *x_lp,
-      int len,
-      opus_val16 *xx)
+      int len)
 {
    int i;
    opus_val32 ac[5];
@@ -159,7 +158,7 @@ void pitch_downsample(opus_val16 *x_lp,
    opus_val16 c1 = QCONST16(.8f,15);
 
    _celt_autocorr(x_lp, ac, NULL, 0,
-                  4, len, xx);
+                  4, len);
 
    /* Noise floor -40 dB */
 #ifdef FIXED_POINT
@@ -260,8 +259,7 @@ void celt_pitch_xcorr(const opus_val16 *_x, const opus_val16 *_y,
 }
 
 void pitch_search(const opus_val16 *x_lp, opus_val16 *y,
-                  int len, int max_pitch, int *pitch,
-                  opus_val16 *x_lp4, opus_val16 *y_lp4, opus_val32 *xcorr)
+                  int len, int max_pitch, int *pitch)
 {
    int i, j;
    int lag;
@@ -277,9 +275,15 @@ void pitch_search(const opus_val16 *x_lp, opus_val16 *y,
    celt_assert(max_pitch>0);
    lag = len+max_pitch;
 
-   //opus_val16 x_lp4[len>>2];
-   //opus_val16 y_lp4[lag>>2];
-   //opus_val32 xcorr[max_pitch>>1];
+#if defined(_MSC_VER)
+   opus_val16* x_lp4 = (opus_val16*)_alloca((len >> 2) * sizeof(opus_val16));
+   opus_val16* y_lp4 = (opus_val16*)_alloca((len >> 2) * sizeof(opus_val16));
+   opus_val32* xcorr = (opus_val32*)_alloca((max_pitch >> 1) * sizeof(opus_val32));
+#else
+   opus_val16 x_lp4[len>>2];
+   opus_val16 y_lp4[lag>>2];
+   opus_val32 xcorr[max_pitch>>1];
+#endif
 
    /* Downsample by 2 again */
    for (j=0;j<len>>2;j++)
@@ -401,7 +405,7 @@ static opus_val16 compute_pitch_gain(opus_val32 xy, opus_val32 xx, opus_val32 yy
 
 static const int second_check[16] = {0, 0, 3, 2, 3, 2, 5, 2, 3, 2, 3, 2, 5, 2, 3, 2};
 opus_val16 remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
-      int N, int *T0_, int prev_period, opus_val16 prev_gain, opus_val32 *yy_lookup)
+      int N, int *T0_, int prev_period, opus_val16 prev_gain)
 {
    int k, i, T, T0;
    opus_val16 g, g0;
@@ -423,7 +427,12 @@ opus_val16 remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
       *T0_=maxperiod-1;
 
    T = T0 = *T0_;
-   //opus_val32 yy_lookup[maxperiod+1];
+#if defined(_MSC_VER)
+   opus_val32* yy_lookup = (opus_val16*)_alloca((maxperiod + 1) * sizeof(opus_val32));
+#else
+   opus_val32 yy_lookup[maxperiod+1];
+#endif
+   
    dual_inner_prod(x, x, x-T0, N, &xx, &xy);
    yy_lookup[0] = xx;
    yy=xx;

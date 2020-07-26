@@ -39,15 +39,13 @@
 #include "arch.h"
 
 void pitch_downsample(opus_val16 *x_lp,
-      int len,
-      opus_val16 *xx);
+      int len);
 
 void pitch_search(const opus_val16 *x_lp, opus_val16 *y,
-                  int len, int max_pitch, int *pitch,
-                  opus_val16* x_lp4, opus_val16* y_lp4, opus_val32* xcorr);
+                  int len, int max_pitch, int *pitch);
 
 opus_val16 remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
-      int N, int *T0, int prev_period, opus_val16 prev_gain, opus_val32 *yy_lookup);
+      int N, int *T0, int prev_period, opus_val16 prev_gain);
 
 
 /* OPT: This is the kernel you really want to optimize. It gets used a lot
