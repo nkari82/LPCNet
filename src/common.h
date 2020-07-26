@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <malloc.h>
 
 #define RNN_INLINE inline
 #define OPUS_INLINE inline
