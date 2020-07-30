@@ -3,14 +3,11 @@
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions
    are met:
-
    - Redistributions of source code must retain the above copyright
    notice, this list of conditions and the following disclaimer.
-
    - Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the distribution.
-
    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
    ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -31,48 +28,62 @@
 #include "freq.h"
 
 
-int main(int argc, char **argv) {
-    FILE *fin, *fout;
-    LPCNetState *net;
+int main(int argc, char** argv) {
+	int mode = -1, in = 0, out = 0;
+    FILE* fin, * fout;
+    LPCNetState* net;
     net = lpcnet_create();
-    if (argc != 3)
+
+    if (argc < 5)
+	{
+	    fprintf(stderr, "usage: test <empty or -taco> <features.f32> <output.pcm>\n");
+	    return 0;
+	}
+    if (argc == 4 && strcmp(argv[1], "-taco") == 0) mode = 1; in = 2; out = 3; // taco
+    if (argc == 3) mode = 0;  in = 1; out = 2;
+    
+    if (mode == -1)
     {
         fprintf(stderr, "usage: test_lpcnet <features.f32> <output.pcm>\n");
         return 0;
     }
-    fin = fopen(argv[1], "rb");
+
+    fin = fopen(argv[in], "rb");
     if (fin == NULL) {
-	fprintf(stderr, "Can't open %s\n", argv[1]);
-	exit(1);
+        fprintf(stderr, "Can't open %s\n", argv[1]);
+        exit(1);
     }
 
-    fout = fopen(argv[2], "wb");
+    fout = fopen(argv[out], "wb");
     if (fout == NULL) {
-	fprintf(stderr, "Can't open %s\n", argv[2]);
-	exit(1);
+        fprintf(stderr, "Can't open %s\n", argv[2]);
+        exit(1);
     }
 
     while (1) {
 
-        float features[NB_FEATURES];
-        short pcm[FRAME_SIZE];
+		float in_features[NB_TOTAL_FEATURES];
+		float features[NB_FEATURES];
+		short pcm[FRAME_SIZE];
 
-#ifndef TACOTRON2
-        float in_features[NB_TOTAL_FEATURES];
-        fread(in_features, sizeof(features[0]), NB_TOTAL_FEATURES, fin);
-        if (feof(fin)) break;
-        RNN_COPY(features, in_features, NB_FEATURES);
-        RNN_CLEAR(&features[18], 18);
-        lpcnet_synthesize(net, pcm, features, FRAME_SIZE);
-#else
-        float in_features[NB_BANDS+2];
-        fread(in_features, sizeof(features[0]), NB_BANDS+2, fin);
-        if (feof(fin)) break;
-        RNN_COPY(features, in_features, NB_BANDS);
-        RNN_CLEAR(&features[18], 18);
-        RNN_COPY(features+36, in_features+NB_BANDS, 2);
-#endif
-	lpcnet_synthesize(net, features, pcm, FRAME_SIZE);        fwrite(pcm, sizeof(pcm[0]), FRAME_SIZE, fout);
+        if (mode == 1)
+        {
+            fread(in_features, sizeof(features[0]), NB_BANDS + 2, fin);
+            if (feof(fin)) break;
+            RNN_COPY(features, in_features, NB_BANDS);
+            RNN_CLEAR(&features[NB_BANDS], NB_BANDS);
+            RNN_COPY(features + (NB_BANDS * 2), in_features + NB_BANDS, 2);
+        }
+        else
+        {
+            fread(in_features, sizeof(features[0]), NB_TOTAL_FEATURES, fin);
+            if (feof(fin)) break;
+            RNN_COPY(features, in_features, NB_FEATURES);
+            RNN_CLEAR(&features[NB_BANDS], NB_BANDS);
+        }
+
+        lpcnet_synthesize(net, features, pcm, FRAME_SIZE);
+        fwrite(pcm, sizeof(pcm[0]), FRAME_SIZE, fout);
     }
     fclose(fin);
     fclose(fout);

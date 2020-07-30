@@ -27,4 +27,7 @@ target_compile_definitions(lpcnet PRIVATE LPCNet)
 add_executable (dump src/dump_data.c)
 target_include_directories(dump PRIVATE include src)
 target_link_libraries (dump LINK_PUBLIC lpcnet)
-#target_compile_definitions(dump PRIVATE Dump)
+
+add_executable (test src/test_lpcnet.c)
+target_include_directories(test PRIVATE include src)
+target_link_libraries (test LINK_PUBLIC lpcnet)
