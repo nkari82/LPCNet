@@ -706,7 +706,16 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int
     if (ffeat) fwrite(buf, 1, 8, ffeat);
   } else if (ffeat) {
     for (i=0;i<4;i++) {
-      fwrite(st->features[i], sizeof(float), NB_TOTAL_FEATURES, ffeat);
+        switch (st->mode)
+        {
+        case 1: // taco
+            fwrite(st->features[i], sizeof(float), NB_BANDS, ffeat);
+            fwrite(st->features[i] + (NB_BANDS*2), sizeof(float), 2, ffeat);  // added pitch, gain (18 + 2)
+            break;
+        default:
+            fwrite(st->features[i], sizeof(float), NB_TOTAL_FEATURES, ffeat);
+            break;
+        }
     }
   }
 }
