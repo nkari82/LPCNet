@@ -34,13 +34,13 @@ int main(int argc, char** argv) {
     LPCNetState* net;
     net = lpcnet_create();
 
-    if (argc < 5)
-	{
-	    fprintf(stderr, "usage: test <empty or -taco> <features.f32> <output.pcm>\n");
-	    return 0;
-	}
     if (argc == 4 && strcmp(argv[1], "-taco") == 0) mode = 1; in = 2; out = 3; // taco
-    if (argc == 3) mode = 0;  in = 1; out = 2;
+    if (argc == 3)
+    {
+        mode = 0;
+        in = 1;
+        out = 2;
+    }
     
     if (mode == -1)
     {
