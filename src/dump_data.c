@@ -140,12 +140,13 @@ int main(int argc, char** argv) {
     int quantize = 0;
     st = lpcnet_encoder_create();
     if (argc == 5 && strcmp(argv[1], "-train") == 0) training = 1;
-    if (argc == 5 && strcmp(argv[1], "-train:taco") == 0) training = 1; st->mode = 1;   // 1 tacotron
+    if (argc == 5 && strcmp(argv[1], "-train:taco") == 0) training = 1; st->mode = 1;   // tacotron
     if (argc == 5 && strcmp(argv[1], "-qtrain") == 0) {
         training = 1;
         quantize = 1;
     }
     if (argc == 4 && strcmp(argv[1], "-test") == 0) training = 0;
+    if (argc == 4 && strcmp(argv[1], "-test:taco") == 0) training = 0; st->mode = 1;    
     if (argc == 4 && strcmp(argv[1], "-qtest") == 0) {
         training = 0;
         quantize = 1;
