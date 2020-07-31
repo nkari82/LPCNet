@@ -34,7 +34,13 @@ int main(int argc, char** argv) {
     LPCNetState* net;
     net = lpcnet_create();
 
-    if (argc == 4 && strcmp(argv[1], "-taco") == 0) mode = 1; in = 2; out = 3; // taco
+    if (argc == 4 && strcmp(argv[1], "-taco") == 0)
+	{
+		mode = 1; 
+		in = 2; 
+		out = 3; // taco
+	}
+	
     if (argc == 3)
     {
         in = 1;
