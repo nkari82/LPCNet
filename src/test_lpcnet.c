@@ -43,24 +43,24 @@ int main(int argc, char** argv) {
     
     if (in == -1 || out == -1)
     {
-        fprintf(stderr, "usage: test_lpcnet <features.f32> <output.pcm>\n");
+        fprintf(stderr, "usage: test_lpcnet <empty or -taco> <features.f32> <output.pcm>\n");
         return 0;
     }
 
-	fprintf(stdout, "Mode: %d\n", mode);
-	
     fin = fopen(argv[in], "rb");
     if (fin == NULL) {
-        fprintf(stderr, "Can't open %s\n", argv[1]);
+        fprintf(stderr, "Can't open %s\n", argv[in]);
         exit(1);
     }
 
     fout = fopen(argv[out], "wb");
     if (fout == NULL) {
-        fprintf(stderr, "Can't open %s\n", argv[2]);
+        fprintf(stderr, "Can't open %s\n", argv[out]);
         exit(1);
     }
 
+	fprintf(stdout, "Mode: %d\n", mode);
+	
     while (1) {
 		float in_features[NB_TOTAL_FEATURES];
 		float features[NB_FEATURES];

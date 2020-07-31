@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.10.2)
 cmake_host_system_information(RESULT _os QUERY OS_NAME)
 cmake_host_system_information(RESULT _platform QUERY OS_PLATFORM)
 
-message(STATUS "--OS: " ${_os})
-message(STATUS "--Platform: " ${_platform})
+message(STATUS "OS: " ${_os})
+message(STATUS "Platform: " ${_platform})
 
 if(MSVC)
 set (CMAKE_C_FLAGS "-D__AVX__ -D__AVX2__")
