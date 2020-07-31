@@ -26,11 +26,21 @@
 '''
 
 import math
-from keras.models import Model
-from keras.layers import Input, GRU, CuDNNGRU, Dense, Embedding, Reshape, Concatenate, Lambda, Conv1D, Multiply, Add, Bidirectional, MaxPooling1D, Activation
-from keras import backend as K
-from keras.initializers import Initializer
-from keras.callbacks import Callback
+# from keras.models import Model
+# from keras.layers import Input, GRU, CuDNNGRU, Dense, Embedding, Reshape, Concatenate, Lambda, Conv1D, Multiply, Add, Bidirectional, MaxPooling1D, Activation
+# from keras import backend as K
+# from keras.initializers import Initializer
+# from keras.callbacks import Callback
+
+# tensorflow v2
+import tensorflow as tf
+from tensorflow.keras import Model
+from tensorflow.compat.v1.keras.layers import CuDNNGRU
+from tensorflow.keras.layers import Input, GRU, Dense, Embedding, Reshape, Concatenate, Lambda, Conv1D, Multiply, Add, Bidirectional, MaxPooling1D, Activation
+from tensorflow.keras import backend as K
+from tensorflow.keras.initializers import Initializer
+from tensorflow.keras.callbacks import Callback
+
 from mdense import MDense
 import numpy as np
 import h5py
