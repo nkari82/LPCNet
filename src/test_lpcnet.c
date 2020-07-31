@@ -61,10 +61,11 @@ int main(int argc, char** argv) {
     }
 
     while (1) {
-
 		float in_features[NB_TOTAL_FEATURES];
 		float features[NB_FEATURES];
 		short pcm[FRAME_SIZE];
+        memset(in_features, 0, sizeof(in_features));
+        memset(features, 0, sizeof(features));
 
         if (mode == 1)
         {
@@ -72,7 +73,7 @@ int main(int argc, char** argv) {
             if (feof(fin)) break;
             RNN_COPY(features, in_features, NB_BANDS);
             RNN_CLEAR(&features[NB_BANDS], NB_BANDS);
-            RNN_COPY(features + (NB_BANDS * 2), in_features + NB_BANDS, 2);
+            RNN_COPY(&features[NB_BANDS], in_features + NB_BANDS, 2);
         }
         else
         {
@@ -85,6 +86,7 @@ int main(int argc, char** argv) {
         lpcnet_synthesize(net, features, pcm, FRAME_SIZE);
         fwrite(pcm, sizeof(pcm[0]), FRAME_SIZE, fout);
     }
+
     fclose(fin);
     fclose(fout);
     lpcnet_destroy(net);
