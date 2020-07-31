@@ -175,6 +175,9 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
         exit(1);
     }
+	
+	fprintf(stdout, "Mode: %d\n", st->mode);
+	
     if (decode) {
         float vq_mem[NB_BANDS] = { 0 };
         while (1) {

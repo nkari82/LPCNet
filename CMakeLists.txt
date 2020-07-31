@@ -1,6 +1,22 @@
 project(lpcnet)
 cmake_minimum_required(VERSION 3.10.2)
 
+cmake_host_system_information(RESULT _os QUERY OS_NAME)
+cmake_host_system_information(RESULT _platform QUERY OS_PLATFORM)
+
+message(STATUS "--OS: " ${_os})
+message(STATUS "--Platform: " ${_platform})
+
+if(MSVC)
+set (CMAKE_C_FLAGS "-D__AVX__ -D__AVX2__")
+set (CMAKE_CXX_FLAGS "-D__AVX__ -D__AVX2__")
+else()
+set (CMAKE_C_FLAGS "-O3 -g -mavx2 -mfma")
+set (CMAKE_CXX_FLAGS "-O3 -g -mavx2 -mfma")
+endif()
+
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+
 add_library(lpcnet STATIC
 	src/common.c
 	src/freq.c
@@ -13,21 +29,21 @@ add_library(lpcnet STATIC
 	src/nnet.c
 	src/nnet_data.c
 	src/ceps_codebooks.c)
-
-
-target_include_directories(lpcnet PRIVATE include src)
-
-set (CMAKE_C_FLAGS "-D__AVX__ -D__AVX2__")
-set (CMAKE_CXX_FLAGS "-D__AVX__ -D__AVX2__")
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-add_definitions(-D__AVX__)
+target_include_directories(lpcnet PRIVATE include ./src)
 target_compile_definitions(lpcnet PRIVATE LPCNet)
 
+add_executable (dump_data src/dump_data.c)
+target_include_directories(dump_data PRIVATE include ./src)
+if(MSVC)
+target_link_libraries (dump_data LINK_PUBLIC lpcnet)
+else()
+target_link_libraries (dump_data LINK_PUBLIC lpcnet m)
+endif()
 
-add_executable (dump src/dump_data.c)
-target_include_directories(dump PRIVATE include src)
-target_link_libraries (dump LINK_PUBLIC lpcnet)
-
-add_executable (test src/test_lpcnet.c)
-target_include_directories(test PRIVATE include src)
-target_link_libraries (test LINK_PUBLIC lpcnet)
+add_executable (test_lpcnet src/test_lpcnet.c)
+target_include_directories(test_lpcnet PRIVATE include ./src)
+if(MSVC)
+target_link_libraries (test_lpcnet LINK_PUBLIC lpcnet)
+else()
+target_link_libraries (test_lpcnet LINK_PUBLIC lpcnet m)
+endif()
