@@ -51,6 +51,10 @@
 #  endif
 #endif
 
+#define CPPGLOB_STATIC
+#include <cppglob/glob.hpp>  // cppglob::glob
+#include <cppglob/iglob.hpp>  // cppglob::iglob
+
 extern "C"
 {
 #endif
@@ -65,28 +69,6 @@ extern "C"
 #if defined(__cplusplus)
 }
 #endif
-
-
-
-template<bool RECURSIVE> std::vector<fs::path> file_list(fs::path dir, std::regex ext_pattern)
-{
-	std::vector<fs::path> result;
-	using iterator = std::conditional< RECURSIVE, fs::recursive_directory_iterator, fs::directory_iterator >::type;
-
-	const iterator end;
-	for (iterator iter{ dir }; iter != end; ++iter)
-	{
-		const std::string extension = iter->path().extension().string();
-		if (fs::is_regular_file(*iter) && std::regex_match(extension, ext_pattern)) result.push_back(*iter);
-	}
-
-	return result;
-}
-
-// example
-//for (const auto& file_path : file_list<false>(argv[1], std::regex("\\.(?:s16|wav)")))
-//	std::cout << file_path << '\n';
-
 
 static void biquad(float* y, float mem[2], const float* x, const float* b, const float* a, int N) {
     int i;
@@ -156,6 +138,17 @@ static short float2short(float x)
     return IMAX(-32767, IMIN(32767, i));
 }
 
+static void copy(FILE* from, FILE* to)
+{
+	char buffer[1024];
+	size_t sz;
+	while (!feof(from))
+	{
+		sz = fread(buffer, 1, sizeof(buffer), from);
+		fwrite(buffer, 1, sz, to);
+	}
+}
+
 int main(int argc, char** argv) {
     int i;
     int count = 0;
@@ -221,7 +214,33 @@ int main(int argc, char** argv) {
         fprintf(stderr, "  or   %s -test <speech> <features out>\n", argv[0]);
         return 1;
     }
-    f1 = fopen(argv[2], "r");
+
+	fs::path path(argv[2]);
+	cppglob::glob_iterator it = cppglob::iglob(path), end;
+	std::list<fs::path> file_list(it, end);
+
+	// merge
+	if (file_list.size() > 1)
+	{
+		auto parent = path.parent_path();
+		auto merge = parent.string() + "/all.s16";
+		
+		f1 = fopen(merge.c_str(), "w");
+		if (f1) {
+			for (auto& file : file_list)
+			{
+				FILE* to = fopen(file.string().c_str(), "r");
+				if (to) {
+					copy(to, f1);
+					fclose(to);
+				}
+			}
+			fclose(f1);
+			path = merge;
+		}
+	}
+
+    f1 = fopen(path.string().c_str(), "r");
     if (f1 == NULL) {
         fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
         exit(1);

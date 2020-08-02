@@ -1,0 +1,4 @@
+[submodule "thirdparty/cppglob"]
+	path = thirdparty/cppglob
+	url = https://github.com/nkari82/cppglob.git
+	branch = master
