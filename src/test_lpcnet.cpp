@@ -23,7 +23,26 @@
 
 #include <math.h>
 #include <stdio.h>
+
 #if defined(__cplusplus)
+#include <iostream>
+#include <string>
+#include <vector>
+#include <regex>
+#include <type_traits>
+
+#ifdef __has_include
+#  if __has_include(<filesystem>)
+#    include <filesystem>
+namespace fs = std::filesystem;
+#  elif __has_include(<experimental/filesystem>)
+#    include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#  else
+static_assert(false, "must include filesystem!");
+#  endif
+#endif
+
 extern "C"
 {
 #endif
@@ -33,6 +52,23 @@ extern "C"
 #if defined(__cplusplus)
 }
 #endif
+
+namespace fs = std::filesystem;
+
+template<bool RECURSIVE> std::vector<fs::path> file_list(fs::path dir, std::regex ext_pattern)
+{
+	std::vector<fs::path> result;
+	using iterator = std::conditional< RECURSIVE, fs::recursive_directory_iterator, fs::directory_iterator >::type;
+
+	const iterator end;
+	for (iterator iter{ dir }; iter != end; ++iter)
+	{
+		const std::string extension = iter->path().extension().string();
+		if (fs::is_regular_file(*iter) && std::regex_match(extension, ext_pattern)) result.push_back(*iter);
+	}
+
+	return result;
+}
 
 
 int main(int argc, char** argv) {

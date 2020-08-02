@@ -9,7 +9,7 @@ message(STATUS "Platform: " ${_platform})
 
 if(MSVC)
 set (CMAKE_C_FLAGS "-D__AVX__ -D__AVX2__")
-set (CMAKE_CXX_FLAGS "/std:c++17 -D__AVX__ -D__AVX2__")
+set (CMAKE_CXX_FLAGS "/std:c++17 /EHsc -D__AVX__ -D__AVX2__")
 else()
 set (CMAKE_C_FLAGS "-O3 -g -mavx2 -mfma")
 set (CMAKE_CXX_FLAGS "-std=c++17 -O3 -g -mavx2 -mfma")
