@@ -28,16 +28,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
+#include <assert.h>
+
+#if defined(__cplusplus)
+extern "C"
+{
+#endif
 #include "kiss_fft.h"
 #include "common.h"
-#include <math.h>
 #include "freq.h"
 #include "pitch.h"
 #include "arch.h"
 #include "celt_lpc.h"
-#include <assert.h>
 #include "lpcnet.h"
 #include "lpcnet_private.h"
+#if defined(__cplusplus)
+}
+#endif
 
 
 static void biquad(float* y, float mem[2], const float* x, const float* b, const float* a, int N) {

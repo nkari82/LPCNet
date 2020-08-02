@@ -23,9 +23,16 @@
 
 #include <math.h>
 #include <stdio.h>
+#if defined(__cplusplus)
+extern "C"
+{
+#endif
 #include "arch.h"
 #include "lpcnet.h"
 #include "freq.h"
+#if defined(__cplusplus)
+}
+#endif
 
 
 int main(int argc, char** argv) {

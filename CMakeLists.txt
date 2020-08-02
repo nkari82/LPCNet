@@ -9,13 +9,11 @@ message(STATUS "Platform: " ${_platform})
 
 if(MSVC)
 set (CMAKE_C_FLAGS "-D__AVX__ -D__AVX2__")
-set (CMAKE_CXX_FLAGS "-D__AVX__ -D__AVX2__")
+set (CMAKE_CXX_FLAGS "/std:c++17 -D__AVX__ -D__AVX2__")
 else()
 set (CMAKE_C_FLAGS "-O3 -g -mavx2 -mfma")
-set (CMAKE_CXX_FLAGS "-O3 -g -mavx2 -mfma")
+set (CMAKE_CXX_FLAGS "-std=c++17 -O3 -g -mavx2 -mfma")
 endif()
-
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 add_library(lpcnet STATIC
 	src/common.c
@@ -29,21 +27,19 @@ add_library(lpcnet STATIC
 	src/nnet.c
 	src/nnet_data.c
 	src/ceps_codebooks.c)
-target_include_directories(lpcnet PRIVATE include ./src)
+target_include_directories(lpcnet PUBLIC ./include PRIVATE ./src)
 target_compile_definitions(lpcnet PRIVATE LPCNet)
 
-add_executable (dump_data src/dump_data.c)
-target_include_directories(dump_data PRIVATE include ./src)
-if(MSVC)
+add_executable (dump_data src/dump_data.cpp)
+target_include_directories(dump_data PRIVATE ./include ./src)
 target_link_libraries (dump_data LINK_PUBLIC lpcnet)
-else()
+if(!MSVC)
 target_link_libraries (dump_data LINK_PUBLIC lpcnet m)
 endif()
 
-add_executable (test_lpcnet src/test_lpcnet.c)
-target_include_directories(test_lpcnet PRIVATE include ./src)
-if(MSVC)
+add_executable (test_lpcnet src/test_lpcnet.cpp)
+target_include_directories(test_lpcnet PRIVATE ./include ./src)
 target_link_libraries (test_lpcnet LINK_PUBLIC lpcnet)
-else()
+if(!MSVC)
 target_link_libraries (test_lpcnet LINK_PUBLIC lpcnet m)
 endif()
