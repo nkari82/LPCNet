@@ -306,12 +306,12 @@ int main(int argc, char** argv) {
 		}
 	}
 
-    f1 = fopen(path.string().c_str(), "r");
+    f1 = fopen(path.string().c_str(), "rb");
     if (f1 == NULL) {
         fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
         exit(1);
     }
-    ffeat = fopen(argv[3], "w");
+    ffeat = fopen(argv[3], "wb");
     if (ffeat == NULL) {
         fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
         exit(1);
@@ -337,7 +337,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (training) {
-        fpcm = fopen(argv[4], "w");
+        fpcm = fopen(argv[4], "wb");
         if (fpcm == NULL) {
             fprintf(stderr, "Error opening output PCM file: %s\n", argv[4]);
             exit(1);
