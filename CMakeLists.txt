@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10.2)
 
-project(lpcnet VERSION 1)
+project(lpcnet)
 
 cmake_host_system_information(RESULT _os QUERY OS_NAME)
 cmake_host_system_information(RESULT _platform QUERY OS_PLATFORM)
@@ -28,7 +28,7 @@ add_subdirectory(./thirdparty/cppglob)
 list(APPEND EXTRA_LIBS cppglob_static)
 list(APPEND EXTRA_INCLUDES "./thirdparty/cppglob/include")
   
-add_subdirectory(./thirdparty/sox)
+add_subdirectory(./thirdparty/sox C)
 list(APPEND EXTRA_LIBS libsox lpc10 gsm)
 list(APPEND EXTRA_INCLUDES "./thirdparty/sox/src")
   
