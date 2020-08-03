@@ -140,8 +140,8 @@ static short float2short(float x)
 
 static void copy(FILE* from, FILE* to)
 {
-	char buffer[1024];
-	size_t sz;
+	char buffer[2048];
+	size_t sz(0);
 	while (!feof(from))
 	{
 		sz = fread(buffer, 1, sizeof(buffer), from);
@@ -229,13 +229,19 @@ int main(int argc, char** argv) {
 	if (file_list.size() > 1)
 	{
 		auto parent = path.parent_path();
+		if (parent.string() == "" || parent.string() == ".")
+			parent = fs::current_path();
+
+        auto parent_path = parent.string();
+        auto parent_name = parent.filename().string();
+        
 #if defined(_MSC_VER)
-		auto merge = parent.string() + "\\" + parent.filename().string() + ".s16.merge";
+		auto merge = parent_path + "\\" + parent_name + ".s16.merge";
 #else
-		auto merge = parent.string() + "/" + parent.filename().string() + ".s16.merge";
+		auto merge = parent_path + "/" + parent_name + ".s16.merge";
 #endif
 		
-		f1 = fopen(merge.c_str(), "w");
+		f1 = fopen(merge.c_str(), "wb");
 		if (f1) {
 			for (auto& file : file_list)
 			{
@@ -244,6 +250,8 @@ int main(int argc, char** argv) {
 				// remove header and resampling
 				if (ext == ".wav")
 				{
+                    fprintf(stdout, "Convert: %s\n", file.string().c_str());
+
 					char* args[10];
 					sox_format_t* in = sox_open_read(file.string().c_str(), NULL, NULL, NULL);
 					file.replace_extension(".s16");
@@ -285,7 +293,9 @@ int main(int argc, char** argv) {
 					sox_close(in);
 				}
 
-				FILE* to = fopen(file.string().c_str(), "r");
+				fprintf(stdout, "Merge: %s\n", file.string().c_str());
+				FILE* to = fopen(file.string().c_str(), "rb");
+                assert(to);
 				if (to) {
 					copy(to, f1);
 					fclose(to);
