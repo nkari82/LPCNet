@@ -35,6 +35,7 @@ import numpy as np
 # import keras.backend as K
 
 # tensorflow v2.0
+import datetime
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint
@@ -63,7 +64,7 @@ if gpus:
     print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
     
     for gpu in gpus:
-        tf.config.experimental.set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)])
+        tf.config.experimental.set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=4024)])
         tf.config.experimental.set_memory_growth(gpu, True)
   except RuntimeError as e:
     print(e)
@@ -142,6 +143,9 @@ else:
     lr = 0.001
     decay = 5e-5
 
+log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
 model.compile(optimizer=Adam(lr, amsgrad=True, decay=decay), loss='sparse_categorical_crossentropy')
 model.save_weights('lpcnet30_384_10_G16_00.h5');
-model.fit([in_data, features, periods], out_exc, batch_size=batch_size, epochs=nb_epochs, validation_split=0.0, callbacks=[checkpoint, sparsify])
+model.fit([in_data, features, periods], out_exc, batch_size=batch_size, epochs=nb_epochs, validation_split=0.0, callbacks=[checkpoint, sparsify, tensorboard_callback])
