@@ -35,6 +35,7 @@ import numpy as np
 # import keras.backend as K
 
 # tensorflow v2.0
+import datetime
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint
