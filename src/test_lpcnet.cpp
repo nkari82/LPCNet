@@ -53,24 +53,6 @@ extern "C"
 }
 #endif
 
-namespace fs = std::filesystem;
-
-template<bool RECURSIVE> std::vector<fs::path> file_list(fs::path dir, std::regex ext_pattern)
-{
-	std::vector<fs::path> result;
-	using iterator = std::conditional< RECURSIVE, fs::recursive_directory_iterator, fs::directory_iterator >::type;
-
-	const iterator end;
-	for (iterator iter{ dir }; iter != end; ++iter)
-	{
-		const std::string extension = iter->path().extension().string();
-		if (fs::is_regular_file(*iter) && std::regex_match(extension, ext_pattern)) result.push_back(*iter);
-	}
-
-	return result;
-}
-
-
 int main(int argc, char** argv) {
 	int mode = 0, in = -1, out = -1;
     FILE* fin, * fout;

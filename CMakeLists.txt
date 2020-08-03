@@ -10,6 +10,7 @@ message(STATUS "Platform: " ${_platform})
 
 option(BUILD_STATIC "Build shared library" ON)
 option(BUILD_SHARED "Build static library" OFF)
+option(HAVE_GOMP "Have gomp" OFF)
 
 if( MSVC )
  set (CMAKE_C_FLAGS "-D__AVX__ -D__AVX2__")
@@ -28,7 +29,7 @@ add_subdirectory(./thirdparty/cppglob)
 list(APPEND EXTRA_LIBS cppglob_static)
 list(APPEND EXTRA_INCLUDES "./thirdparty/cppglob/include")
   
-add_subdirectory(./thirdparty/sox C)
+add_subdirectory(./thirdparty/sox)
 list(APPEND EXTRA_LIBS libsox lpc10 gsm)
 list(APPEND EXTRA_INCLUDES "./thirdparty/sox/src")
   
