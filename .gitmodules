@@ -2,3 +2,7 @@
 	path = thirdparty/cppglob
 	url = https://github.com/nkari82/cppglob.git
 	branch = master
+[submodule "thirdparty/sox"]
+	path = thirdparty/sox
+	url = git://git.code.sf.net/p/sox/code
+	branch = master

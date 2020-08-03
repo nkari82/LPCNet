@@ -30,7 +30,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <assert.h>
-
+#include <sox.h>
 #if defined(__cplusplus)
 #include <iostream>
 #include <string>
@@ -215,6 +215,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+	sox_init();
+
+	sox_signalinfo_t interm_signal;
+	sox_encodinginfo_t out_encoding = { SOX_ENCODING_UNKNOWN, 16, 0, sox_option_default, sox_option_default, sox_option_default, sox_false };
+	sox_signalinfo_t out_signal = { 16000, 1, 0, 0, NULL };
+
 	fs::path path(argv[2]);
 	cppglob::glob_iterator it = cppglob::iglob(path), end;
 	std::list<fs::path> file_list(it, end);
@@ -223,12 +229,62 @@ int main(int argc, char** argv) {
 	if (file_list.size() > 1)
 	{
 		auto parent = path.parent_path();
-		auto merge = parent.string() + "/all.s16";
+#if defined(_MSC_VER)
+		auto merge = parent.string() + "\\" + parent.filename().string() + ".s16.merge";
+#else
+		auto merge = parent.string() + "/" + parent.filename().string() + ".s16.merge";
+#endif
 		
 		f1 = fopen(merge.c_str(), "w");
 		if (f1) {
 			for (auto& file : file_list)
 			{
+				auto ext = file.extension();
+
+				// remove header and resampling
+				if (ext == ".wav")
+				{
+					char* args[10];
+					sox_format_t* in = sox_open_read(file.string().c_str(), NULL, NULL, NULL);
+					file.replace_extension(".s16");
+					sox_format_t* out = sox_open_write(file.string().c_str(), &out_signal, &out_encoding, "sw", NULL, NULL);
+
+					sox_effects_chain_t* chain = sox_create_effects_chain(&in->encoding, &out->encoding);
+					interm_signal = in->signal; /* NB: deep copy */
+
+					sox_effect_t* e = sox_create_effect(sox_find_effect("input"));
+					args[0] = (char *)in, sox_effect_options(e, 1, args);
+					sox_add_effect(chain, e, &interm_signal, &in->signal);
+					free(e);
+
+					if (in->signal.rate != out->signal.rate)
+					{
+						e = sox_create_effect(sox_find_effect("rate"));
+						sox_effect_options(e, 0, NULL);
+						sox_add_effect(chain, e, &interm_signal, &out->signal);
+						free(e);
+					}
+
+					if (in->signal.channels != out->signal.channels) 
+					{
+						e = sox_create_effect(sox_find_effect("channels"));
+						sox_effect_options(e, 0, NULL);
+						sox_add_effect(chain, e, &interm_signal, &out->signal);
+						free(e);
+					}
+
+					e = sox_create_effect(sox_find_effect("output"));
+					args[0] = (char *)out, sox_effect_options(e, 1, args);
+					sox_add_effect(chain, e, &interm_signal, &out->signal);
+					free(e);
+
+					sox_flow_effects(chain, NULL, NULL);
+
+					sox_delete_effects_chain(chain);
+					sox_close(out);
+					sox_close(in);
+				}
+
 				FILE* to = fopen(file.string().c_str(), "r");
 				if (to) {
 					copy(to, f1);
@@ -352,5 +408,6 @@ int main(int argc, char** argv) {
     fclose(ffeat);
     if (fpcm) fclose(fpcm);
     lpcnet_encoder_destroy(st);
+	sox_quit();
     return 0;
 }

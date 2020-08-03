@@ -20,7 +20,6 @@ else()
 endif()
 
 if( MSVC )
-  #add_compile_options( "/MP" )
   add_compile_options( "/EHsc" )
   add_compile_options( "/sdl-" )
 endif()
@@ -28,6 +27,10 @@ endif()
 add_subdirectory(./thirdparty/cppglob)
 list(APPEND EXTRA_LIBS cppglob_static)
 list(APPEND EXTRA_INCLUDES "./thirdparty/cppglob/include")
+  
+add_subdirectory(./thirdparty/sox)
+list(APPEND EXTRA_LIBS libsox lpc10 gsm)
+list(APPEND EXTRA_INCLUDES "./thirdparty/sox/src")
   
 add_library(lpcnet STATIC
 	src/common.c
