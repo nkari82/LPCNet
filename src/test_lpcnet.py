@@ -28,18 +28,39 @@
 import lpcnet
 import sys
 import numpy as np
-from keras.optimizers import Adam
-from keras.callbacks import ModelCheckpoint
+# from keras.optimizers import Adam
+# from keras.callbacks import ModelCheckpoint
+# import keras.backend as K
+
+# tensorflow v2.0
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import ModelCheckpoint
+import tensorflow.keras.backend as K
+
 from ulaw import ulaw2lin, lin2ulaw
-import keras.backend as K
 import h5py
 
 import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.2
-set_session(tf.Session(config=config))
+#from keras.backend.tensorflow_backend import set_session
+#config = tf.ConfigProto()
+#config.gpu_options.per_process_gpu_memory_fraction = 0.2
+#set_session(tf.Session(config=config))
 
+#tensorflow v2.0
+gpus = tf.config.experimental.list_physical_devices('GPU')
+print("Num GPUs Available: ", len(gpus))
+if gpus:
+  try:
+    tf.config.experimental.set_visible_devices(gpus[0], 'GPU')
+    logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+    print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+    
+    for gpu in gpus:
+        tf.config.experimental.set_virtual_device_configuration(gpu, [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=1024)])
+        tf.config.experimental.set_memory_growth(gpu, True)
+  except RuntimeError as e:
+    print(e)
+    
 model, enc, dec = lpcnet.new_lpcnet_model(use_gpu=False)
 
 model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
