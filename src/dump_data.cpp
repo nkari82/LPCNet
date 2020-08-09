@@ -239,85 +239,83 @@ int main(int argc, char** argv) {
 
 	// ./dump_data -test test_input.s16 test_features.f32
 	// ./dump_data -train input.s16 features.f32 data.u8
-	//cxxopts::Options options("dump_data", "LPCNet program");
-	//options.add_options()
-	//	("i,input", "Input data is PCM without header", cxxopts::value<std::string>())
-	//	("f,f32", "", cxxopts::value<std::string>()->implicit_value(""))
-	//	("u,u8", "", cxxopts::value<std::string>()->implicit_value(""))
-	//	("t,train", "training", cxxopts::value<bool>()->default_value("false"))
-	//	("q,qtrain", "quantize training", cxxopts::value<bool>()->default_value("false"))
-	//	("T,test", "", cxxopts::value<bool>()->default_value("false"))
-	//	("m,mode", "The processing method is designated as <empty> or 't2'", cxxopts::value<std::string>()->default_value(""))
-	//	;
+	// ./dump_data -mode train -i input.s16 -o data.f32
+	// ./dump_data -mode test -i *.s16
+	// ./dump_data -mode test -i input.s16 -o
+	cxxopts::Options options("dump_data", "LPCNet program");
+	options.add_options()
+		("i,input", "input data is PCM without header", cxxopts::value<std::string>())
+		("o,out", "output data features(.f32)", cxxopts::value<std::string>())
+		("m,mode", "train or test", cxxopts::value<std::string>())
+		("q,qtrain", "quantize training", cxxopts::value<bool>()->default_value("false"))
+		("t,type", "The processing method is designated as <empty> or 't2'", cxxopts::value<std::string>()->default_value(""))
+		;
 
-	//try
-	//{
-	//	auto result = options.parse(argc, argv);
-	//	training = result["t"].as<bool>() ? 1 : -1;
-	//	std::string input = result["i"].as<std::string>();
-	//	if (result.count("help"))
-	//	{
-	//		std::cout << options.help() << std::endl;
-	//		exit(0);
-	//	}
-	//}
-	//catch (const std::exception& ex)
-	//{
-	//	std::cout << options.help() << std::endl;
-	//	std::cout << ex.what() << std::endl;
-	//	exit(0);
-	//}
+	std::string input, output, type = "none";
 
+	try
+	{
+		auto result = options.parse(argc, argv);
+		auto mode = result["m"].as<std::string>();
+		if (mode == "train")
+			training = 1;
+		else if (mode == "test")
+			training = 0;
+		else if (mode == "qtrain")
+		{
+			training = 1;
+			quantize = 1;
+		}
+		else if (mode == "qtest")
+		{
+			training = 0;
+			quantize = 1;
+		}
+		else if (mode == "encode")
+		{
+			training = 0;
+			quantize = 1;
+			encode = 1;
+		}
+		else if (mode == "decode")
+		{
+			training = 0;
+			decode = 1;
+		}
+
+		input = result["i"].as<std::string>();
+		output = result["o"].as<std::string>();
+		type = result["t"].as<std::string>();
+
+		if (result.count("help"))
+			throw std::exception("help");
+	}
+	catch (const std::exception& ex)
+	{
+		std::cout << options.help() << std::endl;
+		std::cout << ex.what() << std::endl;
+		std::cout << "usage: ./dump_data -mode train -i ./input.s16 -o ./data.f32" << std::endl;
+		exit(0);
+	}
 
     st = lpcnet_encoder_create();
+	if (type == "t2")
+		st->type = 1;
 
-    if (argc == 5 && strcmp(argv[1], "-train") == 0) training = 1;
-    if (argc == 5 && strcmp(argv[1], "-train:taco") == 0) 
-	{
-		training = 1; 
-		st->mode = 1;   // tacotron
-	}
-    if (argc == 5 && strcmp(argv[1], "-qtrain") == 0) {
-        training = 1;
-        quantize = 1;
-    }
-    if (argc == 4 && strcmp(argv[1], "-test") == 0) training = 0;
-    if (argc == 4 && strcmp(argv[1], "-test:taco") == 0) 
-	{
-		training = 0; 
-		st->mode = 1;
-	}
-    if (argc == 4 && strcmp(argv[1], "-qtest") == 0) {
-        training = 0;
-        quantize = 1;
-    }
-    if (argc == 4 && strcmp(argv[1], "-encode") == 0) {
-        training = 0;
-        quantize = 1;
-        encode = 1;
-    }
-    if (argc == 4 && strcmp(argv[1], "-decode") == 0) {
-        training = 0;
-        decode = 1;
-    }
-    if (training == -1) {
-        fprintf(stderr, "usage: %s -train <speech> <features out> <pcm out>\n", argv[0]);
-        fprintf(stderr, "  or   %s -test <speech> <features out>\n", argv[0]);
-        return 1;
-    }
+	fprintf(stdout, "Type: %s\n", type.c_str());
 
 	sox_init();
 
-	fs::path path(argv[2]);
-	cppglob::glob_iterator it = cppglob::iglob(path), end;
-	std::list<fs::path> files(it, end);
+	fs::path input_path(input);
+	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
+	std::list<fs::path> input_files(it, end);
 
 	// create training merged data
 	if (training)
 	{
-		if (files.size() > 1)
+		if (input_files.size() > 1)
 		{
-			auto parent = path.parent_path();
+			auto parent = input_path.parent_path();
 			if (parent.string() == "" || parent.string() == ".")
 				parent = fs::current_path();
 
@@ -332,7 +330,7 @@ int main(int argc, char** argv) {
 
 			f1 = fopen(merge.c_str(), "wb");
 			if (f1) {
-				for (auto& file : files)
+				for (auto& file : input_files)
 				{
 					fs::path out = file;
 					if (file.extension() == ".wav")
@@ -350,35 +348,34 @@ int main(int argc, char** argv) {
 					}
 				}
 				fclose(f1);
-				path = merge;
+				input_path = merge;
 			}
 		}
 		else
 		{
-			if (path.extension() == ".wav")
+			if (input_path.extension() == ".wav")
 			{
-				fs::path out = path;
+				fs::path out = input_path;
 				out.replace_extension(".s16");
-				convert_to(path, out);		// remove header and resampling
-				path = out;
+				convert_to(input_path, out);		// remove header and resampling
+				input_path = out;
 			}
 		}
 	}
 
-    f1 = fopen(path.string().c_str(), "rb");
+    f1 = fopen(input_path.string().c_str(), "rb");
     if (f1 == NULL) {
         fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
         exit(1);
     }
 
 	// multiple test ffeature 데이터 만들기.
-    ffeat = fopen(argv[3], "wb");
+	fs::path ffeat_path(output);
+    ffeat = fopen(ffeat_path.string().c_str(), "wb");
     if (ffeat == NULL) {
         fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
         exit(1);
     }
-	
-	fprintf(stdout, "Mode: %d\n", st->mode);
 	
     if (decode) {
         float vq_mem[NB_BANDS] = { 0 };
@@ -398,7 +395,9 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (training) {
-        fpcm = fopen(argv[4], "wb");
+		fs::path pcm_path(output);
+		pcm_path.replace_extension(".u8");
+        fpcm = fopen(pcm_path.string().c_str(), "wb");
         if (fpcm == NULL) {
             fprintf(stderr, "Error opening output PCM file: %s\n", argv[4]);
             exit(1);

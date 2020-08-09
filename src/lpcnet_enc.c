@@ -706,7 +706,7 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int
     if (ffeat) fwrite(buf, 1, 8, ffeat);
   } else if (ffeat) {
     for (i=0;i<4;i++) {
-        switch (st->mode)
+        switch (st->type)
         {
         case 1: // taco
             fwrite(st->features[i], sizeof(float), NB_BANDS, ffeat);

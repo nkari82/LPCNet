@@ -57,7 +57,7 @@ struct LPCNetEncState{
   float features[4][NB_TOTAL_FEATURES];
   float sig_mem[LPC_ORDER];
   int exc_mem;
-  int mode;
+  int type;
 };
 
 
