@@ -53,7 +53,7 @@ Activations = {
     'SOFTMAX':4
     }
 
-def printVector(f, vector, name, dtype='float'):
+def printVector(f, vector, name, dtype='float32'):
     print(name)
     v = np.reshape(vector, (-1))
     v = v.astype(dtype)
@@ -214,5 +214,9 @@ layer_list = []
 for i, layer in enumerate(model.layers):
     if layer.dump_layer(bf):
        layer_list.append(layer.name)
-        
+
+dump_sparse_gru(model.get_layer('gru_a'), bf)
+
+bf.write(struct.pack('III', max_rnn_neurons, max_conv_inputs, max_mdense_tmp))
+
 bf.close()
