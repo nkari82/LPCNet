@@ -35,12 +35,12 @@ import numpy as np
 # tensorflow v2.0
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint
+import tensorflow as tf
 import tensorflow.keras.backend as K
 
 from ulaw import ulaw2lin, lin2ulaw
 import h5py
 
-import tensorflow as tf
 #from keras.backend.tensorflow_backend import set_session
 #config = tf.ConfigProto()
 #config.gpu_options.per_process_gpu_memory_fraction = 0.2
@@ -84,7 +84,7 @@ periods = (.1 + 50*features[:,:,36:37]+100).astype('int16')
 
 
 
-model.load_weights('lpcnet20h_384_10_G16_80.h5')
+model.load_weights('lpcnet30_384_10_G16_15.h5')
 
 order = 16
 

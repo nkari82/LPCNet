@@ -55,6 +55,9 @@
 #include <cppglob/glob.hpp>  // cppglob::glob
 #include <cppglob/iglob.hpp>  // cppglob::iglob
 
+//#define CXXOPTS_NO_EXCEPTIONS
+#include <cxxopts.hpp>
+
 extern "C"
 {
 #endif
@@ -233,6 +236,39 @@ int main(int argc, char** argv) {
     int encode = 0;
     int decode = 0;
     int quantize = 0;
+
+	// ./dump_data -test test_input.s16 test_features.f32
+	// ./dump_data -train input.s16 features.f32 data.u8
+	//cxxopts::Options options("dump_data", "LPCNet program");
+	//options.add_options()
+	//	("i,input", "Input data is PCM without header", cxxopts::value<std::string>())
+	//	("f,f32", "", cxxopts::value<std::string>()->implicit_value(""))
+	//	("u,u8", "", cxxopts::value<std::string>()->implicit_value(""))
+	//	("t,train", "training", cxxopts::value<bool>()->default_value("false"))
+	//	("q,qtrain", "quantize training", cxxopts::value<bool>()->default_value("false"))
+	//	("T,test", "", cxxopts::value<bool>()->default_value("false"))
+	//	("m,mode", "The processing method is designated as <empty> or 't2'", cxxopts::value<std::string>()->default_value(""))
+	//	;
+
+	//try
+	//{
+	//	auto result = options.parse(argc, argv);
+	//	training = result["t"].as<bool>() ? 1 : -1;
+	//	std::string input = result["i"].as<std::string>();
+	//	if (result.count("help"))
+	//	{
+	//		std::cout << options.help() << std::endl;
+	//		exit(0);
+	//	}
+	//}
+	//catch (const std::exception& ex)
+	//{
+	//	std::cout << options.help() << std::endl;
+	//	std::cout << ex.what() << std::endl;
+	//	exit(0);
+	//}
+
+
     st = lpcnet_encoder_create();
 
     if (argc == 5 && strcmp(argv[1], "-train") == 0) training = 1;
@@ -276,53 +312,56 @@ int main(int argc, char** argv) {
 	cppglob::glob_iterator it = cppglob::iglob(path), end;
 	std::list<fs::path> files(it, end);
 
-	// merge
-	if (files.size() > 1)
+	// create training merged data
+	if (training)
 	{
-		auto parent = path.parent_path();
-		if (parent.string() == "" || parent.string() == ".")
-			parent = fs::current_path();
-
-        auto parent_path = parent.string();
-        auto parent_name = parent.filename().string();
-        
-#if defined(_MSC_VER)
-		auto merge = parent_path + "\\" + parent_name + ".s16.merge";
-#else
-		auto merge = parent_path + "/" + parent_name + ".s16.merge";
-#endif
-		
-		f1 = fopen(merge.c_str(), "wb");
-		if (f1) {
-			for (auto& file : files)
-			{
-				fs::path out = file;
-				if (file.extension() == ".wav")
-				{
-					out.replace_extension(".s16");
-					convert_to(file, out, "sw");			// remove header and resampling
-				}
-
-				fprintf(stdout, "Merge: %s\n", out.string().c_str());
-				FILE* to = fopen(out.string().c_str(), "rb");
-                assert(to);
-				if (to) {
-					copy(to, f1);
-					fclose(to);
-				}
-			}
-			fclose(f1);
-			path = merge;
-		}
-	}
-	else
-	{
-		if (path.extension() == ".wav")
+		if (files.size() > 1)
 		{
-			fs::path out = path;
-			out.replace_extension(".s16");
-			convert_to(path, out);		// remove header and resampling
-			path = out;
+			auto parent = path.parent_path();
+			if (parent.string() == "" || parent.string() == ".")
+				parent = fs::current_path();
+
+			auto parent_path = parent.string();
+			auto parent_name = parent.filename().string();
+
+#if defined(_MSC_VER)
+			auto merge = parent_path + "\\" + parent_name + ".s16.merge";
+#else
+			auto merge = parent_path + "/" + parent_name + ".s16.merge";
+#endif
+
+			f1 = fopen(merge.c_str(), "wb");
+			if (f1) {
+				for (auto& file : files)
+				{
+					fs::path out = file;
+					if (file.extension() == ".wav")
+					{
+						out.replace_extension(".s16");
+						convert_to(file, out, "sw");			// remove header and resampling
+					}
+
+					fprintf(stdout, "Merge: %s\n", out.string().c_str());
+					FILE* to = fopen(out.string().c_str(), "rb");
+					assert(to);
+					if (to) {
+						copy(to, f1);
+						fclose(to);
+					}
+				}
+				fclose(f1);
+				path = merge;
+			}
+		}
+		else
+		{
+			if (path.extension() == ".wav")
+			{
+				fs::path out = path;
+				out.replace_extension(".s16");
+				convert_to(path, out);		// remove header and resampling
+				path = out;
+			}
 		}
 	}
 
@@ -331,6 +370,8 @@ int main(int argc, char** argv) {
         fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
         exit(1);
     }
+
+	// multiple test ffeature 데이터 만들기.
     ffeat = fopen(argv[3], "wb");
     if (ffeat == NULL) {
         fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
