@@ -32,6 +32,8 @@ list(APPEND EXTRA_INCLUDES "./thirdparty/cppglob/include")
 add_subdirectory(./thirdparty/sox)
 list(APPEND EXTRA_LIBS libsox lpc10 gsm)
 list(APPEND EXTRA_INCLUDES "./thirdparty/sox/src")
+
+list(APPEND EXTRA_INCLUDES "./thirdparty/cxxopts/include")
   
 add_library(lpcnet STATIC
 	src/common.c

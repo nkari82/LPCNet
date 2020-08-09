@@ -25,7 +25,7 @@ extern const EmbeddingLayer embed_pitch;
 #define FEATURE_CONV1_DELAY 1
 extern const Conv1DLayer feature_conv1;
 
-#define FEATURE_CONV2_OUT_SIZE 102
+#define FEATURE_CONV2_OUT_SIZE 128
 #define FEATURE_CONV2_STATE_SIZE (128*2)
 #define FEATURE_CONV2_DELAY 1
 extern const Conv1DLayer feature_conv2;
@@ -35,9 +35,6 @@ extern const DenseLayer feature_dense1;
 
 #define EMBED_SIG_OUT_SIZE 128
 extern const EmbeddingLayer embed_sig;
-
-#define EMBED_EXC_OUT_SIZE 128
-extern const EmbeddingLayer embed_exc;
 
 #define FEATURE_DENSE2_OUT_SIZE 128
 extern const DenseLayer feature_dense2;
