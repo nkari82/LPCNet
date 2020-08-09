@@ -149,18 +149,23 @@ static void copy(FILE* from, FILE* to)
 	}
 }
 
-static void convert_to_s16(fs::path& inout)
+static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type = "sw")
 {
-	fprintf(stdout, "Convert: %s\n", inout.string().c_str());
+	fprintf(stdout, "Convert: %s\n", in_path.string().c_str());
 
 	sox_signalinfo_t interm_signal;
 	sox_encodinginfo_t out_encoding = { SOX_ENCODING_SIGN2, 16, 0, sox_option_default, sox_option_default, sox_option_default, sox_false };
-	sox_signalinfo_t out_signal = { 16000, 1, 0, 0, NULL };
+	sox_signalinfo_t out_signal = { 16000, 1, 16, 0, NULL };
+
+	sox_signalinfo_t default_in_signal = { 16000, 1, 16, 0, NULL };
+	sox_signalinfo_t* in_signal = NULL;
+
+	if (strcmp(type, "wav") == 0)
+		in_signal = &default_in_signal;
 
 	char* args[10];
-	sox_format_t* in = sox_open_read(inout.string().c_str(), NULL, NULL, NULL);
-	inout.replace_extension(".s16");
-	sox_format_t* out = sox_open_write(inout.string().c_str(), &out_signal, &out_encoding, "sw", NULL, NULL);
+	sox_format_t* in = sox_open_read(in_path.string().c_str(), in_signal, NULL, NULL);
+	sox_format_t* out = sox_open_write(out_path.string().c_str(), &out_signal, &out_encoding, type, NULL, NULL);
 
 	sox_effects_chain_t* chain = sox_create_effects_chain(&in->encoding, &out->encoding);
 	interm_signal = in->signal; /* NB: deep copy */
@@ -291,11 +296,15 @@ int main(int argc, char** argv) {
 		if (f1) {
 			for (auto& file : files)
 			{
+				fs::path out = file;
 				if (file.extension() == ".wav")
-					convert_to_s16(file);		// remove header and resampling
+				{
+					out.replace_extension(".s16");
+					convert_to(file, out, "sw");			// remove header and resampling
+				}
 
-				fprintf(stdout, "Merge: %s\n", file.string().c_str());
-				FILE* to = fopen(file.string().c_str(), "rb");
+				fprintf(stdout, "Merge: %s\n", out.string().c_str());
+				FILE* to = fopen(out.string().c_str(), "rb");
                 assert(to);
 				if (to) {
 					copy(to, f1);
@@ -309,7 +318,12 @@ int main(int argc, char** argv) {
 	else
 	{
 		if (path.extension() == ".wav")
-			convert_to_s16(path);		// remove header and resampling
+		{
+			fs::path out = path;
+			out.replace_extension(".s16");
+			convert_to(path, out);		// remove header and resampling
+			path = out;
+		}
 	}
 
     f1 = fopen(path.string().c_str(), "rb");
