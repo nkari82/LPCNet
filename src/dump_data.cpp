@@ -241,22 +241,21 @@ int main(int argc, char** argv) {
 	// ./dump_data -train input.s16 features.f32 data.u8
 	// ./dump_data -mode train -i input.s16 -o data.f32
 	// ./dump_data -mode test -i *.s16
-	// ./dump_data -mode test -i input.s16 -o
+	// ./dump_data -m test -i input.s16 -o
 	cxxopts::Options options("dump_data", "LPCNet program");
 	options.add_options()
-		("i,input", "input data is PCM without header", cxxopts::value<std::string>())
-		("o,out", "output data features(.f32)", cxxopts::value<std::string>())
-		("m,mode", "train or test", cxxopts::value<std::string>())
-		("q,qtrain", "quantize training", cxxopts::value<bool>()->default_value("false"))
-		("t,type", "The processing method is designated as <empty> or 't2'", cxxopts::value<std::string>()->default_value(""))
+		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
+		("o,out", "output path", cxxopts::value<std::string>())
+		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
+		("t,type", "The processing method is designated as <empty> or 't2'", cxxopts::value<std::string>()->default_value("none"))
 		;
 
-	std::string input, output, type = "none";
+	std::string input, output, mode, type = "none";
 
 	try
 	{
 		auto result = options.parse(argc, argv);
-		auto mode = result["m"].as<std::string>();
+		mode = result["m"].as<std::string>();
 		if (mode == "train")
 			training = 1;
 		else if (mode == "test")
@@ -283,6 +282,12 @@ int main(int argc, char** argv) {
 			decode = 1;
 		}
 
+		if (result.count("i") == 0)
+			throw std::exception("no input arg");
+		
+		if (result.count("o") == 0)
+			throw std::exception("no ouput arg");
+
 		input = result["i"].as<std::string>();
 		output = result["o"].as<std::string>();
 		type = result["t"].as<std::string>();
@@ -294,45 +299,44 @@ int main(int argc, char** argv) {
 	{
 		std::cout << options.help() << std::endl;
 		std::cout << ex.what() << std::endl;
-		std::cout << "usage: ./dump_data -mode train -i ./input.s16 -o ./data.f32" << std::endl;
+		std::cout << "usage: ./dump_data --mode train -i ./*.wav or s16 -o ./train" << std::endl;
+		std::cout << "usage: ./dump_data --mode test -i ./train/*.s16 -o ./features" << std::endl;
 		exit(0);
 	}
 
+	fprintf(stdout, "Mode: %s, Type: %s\n", mode.c_str(), type.c_str());
+
     st = lpcnet_encoder_create();
-	if (type == "t2")
-		st->type = 1;
-
-	fprintf(stdout, "Type: %s\n", type.c_str());
-
 	sox_init();
 
 	fs::path input_path(input);
+	fs::path output_path(output);
 	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
 	std::list<fs::path> input_files(it, end);
-
-	// create training merged data
+	fs::create_directories(output_path);
+	
 	if (training)
 	{
+		// create training merged data
 		if (input_files.size() > 1)
 		{
 			auto parent = input_path.parent_path();
 			if (parent.string() == "" || parent.string() == ".")
 				parent = fs::current_path();
 
-			auto parent_path = parent.string();
+			auto parent_path =  parent.string();
 			auto parent_name = parent.filename().string();
 
-#if defined(_MSC_VER)
-			auto merge = parent_path + "\\" + parent_name + ".s16.merge";
-#else
-			auto merge = parent_path + "/" + parent_name + ".s16.merge";
-#endif
+			fs::path merge = output_path;
+			merge.append(parent_name + ".s16.merge");
 
-			f1 = fopen(merge.c_str(), "wb");
+			f1 = fopen(merge.string().c_str(), "wb");
 			if (f1) {
 				for (auto& file : input_files)
 				{
-					fs::path out = file;
+					fs::path out = output_path;
+					out.append(file.filename().string());
+
 					if (file.extension() == ".wav")
 					{
 						out.replace_extension(".s16");
@@ -355,128 +359,142 @@ int main(int argc, char** argv) {
 		{
 			if (input_path.extension() == ".wav")
 			{
-				fs::path out = input_path;
+				fs::path out = output_path;
+				out.append(input_path.filename().string());
 				out.replace_extension(".s16");
 				convert_to(input_path, out);		// remove header and resampling
 				input_path = out;
 			}
 		}
+
+		input_files.clear();
+		input_files.emplace_back(input_path);	// merged 
 	}
 
-    f1 = fopen(input_path.string().c_str(), "rb");
-    if (f1 == NULL) {
-        fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
-        exit(1);
-    }
+	for (auto& input_file : input_files)
+	{
+		lpcnet_encoder_init(st);
+		if (type == "t2")
+			st->type = 1;
 
-	// multiple test ffeature 데이터 만들기.
-	fs::path ffeat_path(output);
-    ffeat = fopen(ffeat_path.string().c_str(), "wb");
-    if (ffeat == NULL) {
-        fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
-        exit(1);
-    }
-	
-    if (decode) {
-        float vq_mem[NB_BANDS] = { 0 };
-        while (1) {
-            int ret;
-            unsigned char buf[8];
-            float features[4][NB_TOTAL_FEATURES];
-            //int c0_id, main_pitch, modulation, corr_id, vq_end[3], vq_mid, interp_id;
-            //ret = fscanf(f1, "%d %d %d %d %d %d %d %d %d\n", &c0_id, &main_pitch, &modulation, &corr_id, &vq_end[0], &vq_end[1], &vq_end[2], &vq_mid, &interp_id);
-            ret = fread(buf, 1, 8, f1);
-            if (ret != 8) break;
-            decode_packet(features, vq_mem, buf);
-            for (i = 0; i < 4; i++) {
-                fwrite(features[i], sizeof(float), NB_TOTAL_FEATURES, ffeat);
-            }
-        }
-        return 0;
-    }
-    if (training) {
-		fs::path pcm_path(output);
-		pcm_path.replace_extension(".u8");
-        fpcm = fopen(pcm_path.string().c_str(), "wb");
-        if (fpcm == NULL) {
-            fprintf(stderr, "Error opening output PCM file: %s\n", argv[4]);
-            exit(1);
-        }
-    }
-    while (1) {
-        float E = 0;
-        int silent;
-        for (i = 0; i < FRAME_SIZE; i++) x[i] = tmp[i];
-        fread(tmp, sizeof(short), FRAME_SIZE, f1);
-        if (feof(f1)) {
-            if (!training) break;
-            rewind(f1);
-            fread(tmp, sizeof(short), FRAME_SIZE, f1);
-            one_pass_completed = 1;
-        }
-        for (i = 0; i < FRAME_SIZE; i++) E += tmp[i] * (float)tmp[i];
-        if (training) {
-            silent = E < 5000 || (last_silent && E < 20000);
-            if (!last_silent && silent) {
-                for (i = 0; i < FRAME_SIZE; i++) savedX[i] = x[i];
-            }
-            if (last_silent && !silent) {
-                for (i = 0; i < FRAME_SIZE; i++) {
-                    float f = (float)i / FRAME_SIZE;
-                    tmp[i] = (int)floor(.5 + f * tmp[i] + (1 - f) * savedX[i]);
-                }
-            }
-            if (last_silent) {
-                last_silent = silent;
-                continue;
-            }
-            last_silent = silent;
-        }
-        if (count * FRAME_SIZE_5MS >= 10000000 && one_pass_completed) break;
-        if (training && ++gain_change_count > 2821) {
-            float tmp;
-            speech_gain = pow(10., (-20 + (rand() % 40)) / 20.);
-            if (rand() % 20 == 0) speech_gain *= .01;
-            if (rand() % 100 == 0) speech_gain = 0;
-            gain_change_count = 0;
-            rand_resp(a_sig, b_sig);
-            tmp = (float)rand() / RAND_MAX;
-            noise_std = 10 * tmp * tmp;
-        }
-        biquad(x, mem_hp_x, x, b_hp, a_hp, FRAME_SIZE);
-        biquad(x, mem_resp_x, x, b_sig, a_sig, FRAME_SIZE);
-        preemphasis(x, &mem_preemph, x, PREEMPHASIS, FRAME_SIZE);
-        for (i = 0; i < FRAME_SIZE; i++) {
-            float g;
-            float f = (float)i / FRAME_SIZE;
-            g = f * speech_gain + (1 - f) * old_speech_gain;
-            x[i] *= g;
-        }
-        for (i = 0; i < FRAME_SIZE; i++) x[i] += rand() / (float)RAND_MAX - .5;
-        /* PCM is delayed by 1/2 frame to make the features centered on the frames. */
-        for (i = 0; i < FRAME_SIZE - TRAINING_OFFSET; i++) pcm[i + TRAINING_OFFSET] = float2short(x[i]);
-        compute_frame_features(st, x);
+		f1 = fopen(input_file.string().c_str(), "rb");
+		if (f1 == NULL) {
+			fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
+			exit(1);
+		}
+		
+		fs::path ffeat_path = output_path;
+		ffeat_path.append(input_file.filename().string());
+		ffeat_path.replace_extension(".f32");
 
-        RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
-        if (fpcm) {
-            compute_noise(&noisebuf[st->pcount * FRAME_SIZE], noise_std);
-        }
-        st->pcount++;
-        /* Running on groups of 4 frames. */
-        if (st->pcount == 4) {
-            unsigned char buf[8];
-            process_superframe(st, buf, ffeat, encode, quantize);
-            if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
-            st->pcount = 0;
-        }
-        //if (fpcm) fwrite(pcm, sizeof(short), FRAME_SIZE, fpcm);
-        for (i = 0; i < TRAINING_OFFSET; i++) pcm[i] = float2short(x[i + FRAME_SIZE - TRAINING_OFFSET]);
-        old_speech_gain = speech_gain;
-        count++;
-    }
-    fclose(f1);
-    fclose(ffeat);
-    if (fpcm) fclose(fpcm);
+		ffeat = fopen(ffeat_path.string().c_str(), "wb");
+		if (ffeat == NULL) {
+			fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
+			exit(1);
+		}
+
+		if (decode) {
+			float vq_mem[NB_BANDS] = { 0 };
+			while (1) {
+				int ret;
+				unsigned char buf[8];
+				float features[4][NB_TOTAL_FEATURES];
+				//int c0_id, main_pitch, modulation, corr_id, vq_end[3], vq_mid, interp_id;
+				//ret = fscanf(f1, "%d %d %d %d %d %d %d %d %d\n", &c0_id, &main_pitch, &modulation, &corr_id, &vq_end[0], &vq_end[1], &vq_end[2], &vq_mid, &interp_id);
+				ret = fread(buf, 1, 8, f1);
+				if (ret != 8) break;
+				decode_packet(features, vq_mem, buf);
+				for (i = 0; i < 4; i++) {
+					fwrite(features[i], sizeof(float), NB_TOTAL_FEATURES, ffeat);
+				}
+			}
+			return 0;
+		}
+		if (training) {
+			fs::path pcm_path = output_path;
+			pcm_path.append(input_file.filename().string());
+			pcm_path.replace_extension(".u8");
+			fpcm = fopen(pcm_path.string().c_str(), "wb");
+			if (fpcm == NULL) {
+				fprintf(stderr, "Error opening output PCM file: %s\n", argv[4]);
+				exit(1);
+			}
+		}
+		while (1) {
+			float E = 0;
+			int silent;
+			for (i = 0; i < FRAME_SIZE; i++) x[i] = tmp[i];
+			fread(tmp, sizeof(short), FRAME_SIZE, f1);
+			if (feof(f1)) {
+				if (!training) break;
+				rewind(f1);
+				fread(tmp, sizeof(short), FRAME_SIZE, f1);
+				one_pass_completed = 1;
+			}
+			for (i = 0; i < FRAME_SIZE; i++) E += tmp[i] * (float)tmp[i];
+			if (training) {
+				silent = E < 5000 || (last_silent && E < 20000);
+				if (!last_silent && silent) {
+					for (i = 0; i < FRAME_SIZE; i++) savedX[i] = x[i];
+				}
+				if (last_silent && !silent) {
+					for (i = 0; i < FRAME_SIZE; i++) {
+						float f = (float)i / FRAME_SIZE;
+						tmp[i] = (int)floor(.5 + f * tmp[i] + (1 - f) * savedX[i]);
+					}
+				}
+				if (last_silent) {
+					last_silent = silent;
+					continue;
+				}
+				last_silent = silent;
+			}
+			if (count * FRAME_SIZE_5MS >= 10000000 && one_pass_completed) break;
+			if (training && ++gain_change_count > 2821) {
+				float tmp;
+				speech_gain = pow(10., (-20 + (rand() % 40)) / 20.);
+				if (rand() % 20 == 0) speech_gain *= .01;
+				if (rand() % 100 == 0) speech_gain = 0;
+				gain_change_count = 0;
+				rand_resp(a_sig, b_sig);
+				tmp = (float)rand() / RAND_MAX;
+				noise_std = 10 * tmp * tmp;
+			}
+			biquad(x, mem_hp_x, x, b_hp, a_hp, FRAME_SIZE);
+			biquad(x, mem_resp_x, x, b_sig, a_sig, FRAME_SIZE);
+			preemphasis(x, &mem_preemph, x, PREEMPHASIS, FRAME_SIZE);
+			for (i = 0; i < FRAME_SIZE; i++) {
+				float g;
+				float f = (float)i / FRAME_SIZE;
+				g = f * speech_gain + (1 - f) * old_speech_gain;
+				x[i] *= g;
+			}
+			for (i = 0; i < FRAME_SIZE; i++) x[i] += rand() / (float)RAND_MAX - .5;
+			/* PCM is delayed by 1/2 frame to make the features centered on the frames. */
+			for (i = 0; i < FRAME_SIZE - TRAINING_OFFSET; i++) pcm[i + TRAINING_OFFSET] = float2short(x[i]);
+			compute_frame_features(st, x);
+
+			RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
+			if (fpcm) {
+				compute_noise(&noisebuf[st->pcount * FRAME_SIZE], noise_std);
+			}
+			st->pcount++;
+			/* Running on groups of 4 frames. */
+			if (st->pcount == 4) {
+				unsigned char buf[8];
+				process_superframe(st, buf, ffeat, encode, quantize);
+				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
+				st->pcount = 0;
+			}
+			//if (fpcm) fwrite(pcm, sizeof(short), FRAME_SIZE, fpcm);
+			for (i = 0; i < TRAINING_OFFSET; i++) pcm[i] = float2short(x[i + FRAME_SIZE - TRAINING_OFFSET]);
+			old_speech_gain = speech_gain;
+			count++;
+		}
+		fclose(f1);
+		fclose(ffeat);
+		if (fpcm) fclose(fpcm);
+	}
     lpcnet_encoder_destroy(st);
 	sox_quit();
     return 0;
