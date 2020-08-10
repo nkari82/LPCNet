@@ -54,14 +54,14 @@ extern "C"
 #endif
 
 int main(int argc, char** argv) {
-	int mode = 0, in = -1, out = -1;
+	int type = 0, in = -1, out = -1;
     FILE* fin, * fout;
     LPCNetState* net;
     net = lpcnet_create();
 
     if (argc == 4 && strcmp(argv[1], "-taco") == 0)
 	{
-		mode = 1; 
+		type = 1;
 		in = 2; 
 		out = 3; // taco
 	}
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-	fprintf(stdout, "Mode: %d\n", mode);
+	fprintf(stdout, "Type: %d\n", type);
 	
     while (1) {
 		float in_features[NB_TOTAL_FEATURES];
@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
         memset(in_features, 0, sizeof(in_features));
         memset(features, 0, sizeof(features));
 
-        if (mode == 1)
+        if (type == 1)
         {
             fread(in_features, sizeof(features[0]), NB_BANDS + 2, fin);
             if (feof(fin)) break;
