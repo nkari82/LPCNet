@@ -96,27 +96,25 @@ int main(int argc, char** argv) {
 		float in_features[NB_TOTAL_FEATURES];
 		float features[NB_FEATURES];
 		short pcm[FRAME_SIZE];
-        memset(in_features, 0, sizeof(in_features));
-        memset(features, 0, sizeof(features));
 
-        if (type == 1)
-        {
-            fread(in_features, sizeof(features[0]), NB_BANDS + 2, fin);
-            if (feof(fin)) break;
-            RNN_COPY(features, in_features, NB_BANDS);
-            RNN_CLEAR(&features[NB_BANDS], NB_BANDS);
-            RNN_COPY(&features[NB_BANDS], in_features + NB_BANDS, 2);
-        }
-        else
-        {
-            fread(in_features, sizeof(features[0]), NB_TOTAL_FEATURES, fin);
-            if (feof(fin)) break;
-            RNN_COPY(features, in_features, NB_FEATURES);
-            RNN_CLEAR(&features[NB_BANDS], NB_BANDS);
-        }
+		if (type == 1)
+		{
+			fread(in_features, sizeof(features[0]), NB_BANDS+2, fin);
+			if (feof(fin)) break;
+			RNN_COPY(features, in_features, NB_BANDS);
+			RNN_CLEAR(&features[NB_BANDS], NB_BANDS);
+			RNN_COPY(&features[NB_BANDS*2], &in_features[NB_BANDS], 2);
+		}
+		else
+		{
+			fread(in_features, sizeof(features[0]), NB_TOTAL_FEATURES, fin);
+			if (feof(fin)) break;
+			RNN_COPY(features, in_features, NB_FEATURES);
+			RNN_CLEAR(&features[NB_BANDS], NB_BANDS);
+		}
 
-        lpcnet_synthesize(net, features, pcm, FRAME_SIZE);
-        fwrite(pcm, sizeof(pcm[0]), FRAME_SIZE, fout);
+		lpcnet_synthesize(net, features, pcm, FRAME_SIZE);
+		fwrite(pcm, sizeof(pcm[0]), FRAME_SIZE, fout);
     }
 
     fclose(fin);
