@@ -21,14 +21,14 @@ import os
 import numpy as np
 import yaml
 import tensorflow_tts as tts
+from tqdm import tqdm
+from sklearn.model_selection import train_test_split
 from tensorflow_tts.configs.tacotron2 import Tacotron2Config
 from tensorflow_tts.models import TFTacotron2
 from tensorflow_tts.optimizers import AdamWeightDecay, WarmUp
 from tensorflow_tts.trainers import Seq2SeqBasedTrainer
 from tensorflow_tts.utils import (calculate_2d_loss, calculate_3d_loss, return_strategy)
-from tqdm import tqdm
-from sklearn.model_selection import train_test_split
-from Processor import LJSpeechProcessor 
+from Processor import JSpeechProcessor
 
 sys.path.append(".")
 
@@ -359,8 +359,6 @@ def main():
     parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
     parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     args = parser.parse_args()
-
-    config = Config(args.outdir)
     
     # set mixed precision config
     if args.mixed_precision == 1:
@@ -382,11 +380,14 @@ def main():
     if not os.path.exists(args.outdir):
         os.makedirs(args.outdir)
     
-    # split train and test 
-    processor = LJSpeechProcessor(args.rootdir, cleaner_names='english_cleaners')     # for test
+    # select processor
+    processor = JSpeechProcessor(args.rootdir)     # for test
+    config = Config(args.outdir, processor.vocab_size())
+    
     max_mel_length = processor.max_feat_size() // 4 // config.n_mels
     max_ids_length = processor.max_ids_length()
     
+    # split train and test 
     train_split, valid_split = train_test_split(processor.items, test_size=config.test_size,random_state=42,shuffle=True)
     train_dataset = generate_datasets(train_split, config, max_mel_length, max_ids_length)
     valid_dataset = generate_datasets(valid_split, config, max_mel_length, max_ids_length)

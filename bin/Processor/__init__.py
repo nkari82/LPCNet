@@ -1,1 +1,1 @@
-from .ljspeech import LJSpeechProcessor
+from. js import JSpeechProcessor
