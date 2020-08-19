@@ -1,8 +1,4 @@
 import jaconv
-from random import random
-
-_pad = "_"
-_eos = "~"
 
 class JSpeechProcessor(object):
     def __init__(self, data_dir, cleaner_names, metadata_filename="metadata.csv"):
@@ -10,7 +6,9 @@ class JSpeechProcessor(object):
         self._cleaner_names = cleaner_names
         self._max_ids_length = 0
         self._max_feat_size = 0
+        self._eos = 0
         self._speaker_name = "tsuchiya"
+        
         if data_dir:
             with open(os.path.join(data_dir, metadata_filename), encoding="utf-8") as f:
                 self.items = [self._split_line(data_dir, line, "|") for line in f]
@@ -46,6 +44,7 @@ class JSpeechProcessor(object):
         return 0xffff
         
     def text_to_sequence(text):
+        # cleaner
         for c in [" ", "　", "「", "」", "『", "』", "・", "【", "】","（", "）", "(", ")"]:
             text = text.replace(c, "")
         text = text.replace("!", "！")
@@ -56,7 +55,7 @@ class JSpeechProcessor(object):
         text = jaconv.hira2kata(text)
         text = self._add_punctuation(text)
 
-        return [ord(c) for c in text] + [_eos]  # EOS
+        return [ord(c) for c in text] + [self._eos]  # EOS
 
     def sequence_to_text(seq):
         return "".join(chr(n) for n in seq)
