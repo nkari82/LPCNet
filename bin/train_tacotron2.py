@@ -311,9 +311,9 @@ class Tacotron2Trainer(Seq2SeqBasedTrainer):
         for idx, (mel_gt, mel_before, mel_after, alignment_history) in enumerate(
             zip(mel_gts, mels_before, mels_after, alignment_historys), 1
         ):
-            mel_gt = tf.reshape(mel_gt, (-1, self.config.n_mels)).numpy()             # [length, 80]
-            mel_before = tf.reshape(mel_before, (-1, self.config.n_mels)).numpy()   # [length, 80]
-            mel_after = tf.reshape(mel_after, (-1, self.config.n_mels)).numpy()       # [length, 80]
+            mel_gt = tf.reshape(mel_gt, (-1, self.config.n_mels)).numpy()
+            mel_before = tf.reshape(mel_before, (-1, self.config.n_mels)).numpy()
+            mel_after = tf.reshape(mel_after, (-1, self.config.n_mels)).numpy()
 
             # plot figure and save it
             figname = os.path.join(dirname, f"{idx}.png")
@@ -398,7 +398,7 @@ def main():
         strategy=STRATEGY,
         steps=0,
         epochs=0,
-        is_mixed_precision=args.mixed_precision,
+        is_mixed_precision=args.mixed_precision
     )
     
     with STRATEGY.scope():
