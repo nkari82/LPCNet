@@ -206,7 +206,7 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 	sox_close(in);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, const char** argv) {
     int i;
     int count = 0;
     static const float a_hp[2] = { -1.99599, 0.99600 };
