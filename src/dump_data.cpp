@@ -300,7 +300,7 @@ int main(int argc, char** argv) {
 		std::cout << options.help() << std::endl;
 		std::cout << ex.what() << std::endl;
 		std::cout << "usage: ./dump_data --mode train -i ./*.wav or s16 -o ./train" << std::endl;
-		std::cout << "usage: ./dump_data --mode test -i ./train/*.s16 -o ./features" << std::endl;
+		std::cout << "usage: ./dump_data --mode test -i ./train/*.s16 -o ./feats" << std::endl;
 		exit(0);
 	}
 

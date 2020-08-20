@@ -1,12 +1,28 @@
+# -*- coding: utf-8 -*-
 import jaconv
+import MeCab
+import sys
+
+#http://pop365.cocolog-nifty.com/blog/2015/03/windows-64bit-m.html
+#pip install mecab-python3
+#pip install unidic-lite
+
+_pad = "pad"
+_eos = "eos"
+_punctuation = [".", ",", "、", "。", "！", "？", "!", "?"]
+_cleaner = [" ", "　", "「", "」", "『", "』", "・", "【", "】","（", "）", "(", ")"]
+_letters = [chr(_) for _ in range(0x30A0, 0x30FF)]  # katakana
+symbols = [_pad] + _punctuation + _letters + [_eos]
 
 class JSpeechProcessor(object):
     def __init__(self, data_dir, cleaner_names, metadata_filename="metadata.csv"):
+        self._tagger = MeCab.Tagger('')
+        self._symbol_to_id = {c: i for i, c in enumerate(symbols)}
+        self._id_to_symbol = {i: c for i, c in enumerate(symbols)}
         self._data_dir = data_dir
         self._cleaner_names = cleaner_names
         self._max_ids_length = 0
         self._max_feat_size = 0
-        self._eos = 0
         self._speaker_name = "tsuchiya"
         
         if data_dir:
@@ -21,17 +37,27 @@ class JSpeechProcessor(object):
         self._max_ids_length = max(self._max_ids_length, text_ids.shape[0])
         return text_ids, feat_path, self._speaker_name
         
-    def _add_punctuation(text):
-        last = text[-1]
-        if last not in [".", ",", "、", "。", "！", "？", "!", "?"]:
-            text = text + "。"
-        return text
-
-    def _normalize_delimitor(text):
+    def _pronunciation(self, text):
+        result = self._tagger.parse(text)
+        tokens=[]
+        for line in result.split("\n")[:-1]:
+            s = line.split("\t")
+            if len(s) == 1:
+                break
+            tokens.append(s[0] if s[0] in _punctuation else s[1])
+        return ''.join(token for token in tokens)
+    
+    def number_to_japanese(self, text):
+        pass
+        
+    def _normalize(self, text):
         text = text.replace(",", "、")
         text = text.replace(".", "。")
         text = text.replace("，", "、")
         text = text.replace("．", "。")
+        text = text.replace("!", "！")
+        text = text.replace("?", "？")
+        text = jaconv.normalize(text)
         return text
 
     def max_ids_length(self):
@@ -41,21 +67,33 @@ class JSpeechProcessor(object):
         return self._max_feat_size
         
     def vocab_size(self):
-        return 0xffff
+        return len(symbols)
         
-    def text_to_sequence(text):
-        # cleaner
-        for c in [" ", "　", "「", "」", "『", "』", "・", "【", "】","（", "）", "(", ")"]:
-            text = text.replace(c, "")
-        text = text.replace("!", "！")
-        text = text.replace("?", "？")
-
-        text = self._normalize_delimitor(text)
-        text = jaconv.normalize(text)
-        text = jaconv.hira2kata(text)
-        text = self._add_punctuation(text)
-
-        return [ord(c) for c in text] + [self._eos]  # EOS
+    def text_to_sequence(self, text):
+        sequence = []
+        text = self._clean_text(text)
+        text = self._normalize(text)
+        text = self._pronunciation(text)
+        sequence = self._symbols_to_sequence(text)
+        sequence += self._symbols_to_sequence([_eos])
 
     def sequence_to_text(seq):
         return "".join(chr(n) for n in seq)
+        
+    def _symbols_to_sequence(self, symbols):
+        return [self._symbol_to_id[s] for s in symbols]
+    
+    def _clean_text(self, text):
+        for c in _cleaner:
+            text = text.replace(c, "")
+        return text
+        
+    def text_to(self, text):
+        text = self._clean_text(text)
+        text = self._normalize(text)
+        text = self._pronunciation(text)
+        print(text)
+        
+#processor = JSpeechProcessor()
+#processor.text_to_sequence('また東寺のように五大明王と呼ばれる主要な明王の中央に配されることも多い。')
+
