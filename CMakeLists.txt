@@ -48,7 +48,6 @@ add_library(lpcnet STATIC
 	src/nnet_data.c
 	src/ceps_codebooks.c)
 target_include_directories(lpcnet PUBLIC ./include PRIVATE ./src)
-target_compile_definitions(lpcnet PRIVATE LPCNet)
 
 add_executable (dump_data src/dump_data.cpp)
 target_include_directories(dump_data PRIVATE ./include ./src ${EXTRA_INCLUDES})
