@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-import jaconv
-import MeCab
 import sys
+import unicodedata
+import MeCab
 
 #http://pop365.cocolog-nifty.com/blog/2015/03/windows-64bit-m.html
 #pip install mecab-python3
@@ -51,14 +51,15 @@ class JSpeechProcessor(object):
         pass
         
     def _normalize(self, text):
-        text = text.replace(",", "、")
-        text = text.replace(".", "。")
-        text = text.replace("，", "、")
-        text = text.replace("．", "。")
-        text = text.replace("!", "！")
-        text = text.replace("?", "？")
-        text = jaconv.normalize(text)
-        return text
+        text = text.replace('〜', 'ー').replace('～', 'ー')
+        text = text.replace("’", "'").replace('”', '"').replace('“', '``')
+        text = text.replace('―', '-').replace('‐', '-').replace('˗', '-').replace('֊', '-')
+        text = text.replace('‐', '-').replace('‑', '-').replace('‒', '-').replace('–', '-')
+        text = text.replace('⁃', '-').replace('⁻', '-').replace('₋', '-').replace('−', '-')
+        text = text.replace('﹣', 'ー').replace('－', 'ー').replace('—', 'ー').replace('―', 'ー')
+        text = text.replace('━', 'ー').replace('─', 'ー').replace(',', '、').replace('.', '。')
+        text = text.replace('，', '、').replace('．', '。').replace('!', '！').replace('?', '？')
+        return unicodedata.normalize('NFKC', text)
 
     def max_ids_length(self):
         return self._max_ids_length
