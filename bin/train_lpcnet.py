@@ -120,19 +120,21 @@ checkpoint_dir = os.path.dirname(checkpoint_path)
 checkpoint = ModelCheckpoint(filepath=checkpoint_path, verbose=1)
 
 #Training from scratch
-sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
-lr = 0.001
-decay = 5e-5
 initial_epoch = 0
 
 latest = tf.train.latest_checkpoint(checkpoint_dir)
 if latest is not None:
-    print(latest)
     model.load_weights(latest)
-    loss,acc = model.evaluate([in_data, features, periods], verbose=2)
+    sparsify = lpcnet.Sparsify(0, 0, 1, (0.05, 0.05, 0.2))
+    lr = 0.0001
+    decay = 0
     initial_epoch = int(latest.split('_')[-1].replace('.ckpt',''))
-    print("Restored model, accuracy: {:5.2f}%, loss: {}".format(100*acc, loss))
+    print("Restored model")
+else
+    sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
+    lr = 0.001
+    decay = 5e-5
 
 model.compile(optimizer=Adam(lr, amsgrad=True, decay=decay), loss='sparse_categorical_crossentropy')
 model.save_weights(checkpoint_path.format(epoch=0))
-model.fit([in_data, features, periods], out_exc, batch_size=batch_size, epochs=nb_epochs, validation_split=0.0, callbacks=[checkpoint, sparsify, tensorboard_callback])
+model.fit([in_data, features, periods], out_exc, batch_size=batch_size, initial_epoch=initial_epoch, epochs=nb_epochs, validation_split=0.0, callbacks=[checkpoint, sparsify, tensorboard_callback])
