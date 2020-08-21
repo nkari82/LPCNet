@@ -112,8 +112,9 @@ del in_exc
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
-checkpoint_path = "training/lpcnet30_384_10_G16_{epoch:02d}.h5"
+checkpoint_path = "training/lpcnet30_384_10_G16_{epoch:02d}.ckpt"
 checkpoint_dir = os.path.dirname(checkpoint_path)
+
 
 # dump models to disk as we go
 checkpoint = ModelCheckpoint(filepath=checkpoint_path, verbose=1)
@@ -125,10 +126,11 @@ decay = 5e-5
 initial_epoch = 0
 
 latest = tf.train.latest_checkpoint(checkpoint_dir)
-if latest not None:
-    model.load_weights(checkpoint_path)
+if latest is not None:
+    print(latest)
+    model.load_weights(latest)
     loss,acc = model.evaluate([in_data, features, periods], verbose=2)
-    initial_epoch = int(latest.split('_')[-1].replace('.h5',''))
+    initial_epoch = int(latest.split('_')[-1].replace('.ckpt',''))
     print("Restored model, accuracy: {:5.2f}%, loss: {}".format(100*acc, loss))
 
 model.compile(optimizer=Adam(lr, amsgrad=True, decay=decay), loss='sparse_categorical_crossentropy')
