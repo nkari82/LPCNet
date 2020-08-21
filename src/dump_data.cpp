@@ -152,7 +152,7 @@ static void copy(FILE* from, FILE* to)
 	}
 }
 
-static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type = "sw")
+static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type = "sw", int silence = 0)
 {
 	fprintf(stdout, "Convert: %s\n", in_path.string().c_str());
 
@@ -177,6 +177,41 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 	args[0] = (char *)in, sox_effect_options(e, 1, args);
 	sox_add_effect(chain, e, &interm_signal, &in->signal);
 	free(e);
+
+	// https://digitalcardboard.com/blog/2009/08/25/the-sox-of-silence/comment-page-2/
+	// Trimming all (silence 1 0.1 1% -1 0.1 1%)
+	// Trimming begin (silence 1 0.1 1%)
+	switch (silence)
+	{
+	case 1:
+	{
+		int trim_count = 2;
+		while (trim_count--)
+		{
+			e = sox_create_effect(sox_find_effect("silence"));
+			args[0] = "1", args[1] = "0.1", args[2] = "1%", sox_effect_options(e, 3, args);
+			sox_add_effect(chain, e, &interm_signal, &out->signal);
+			free(e);
+
+			e = sox_create_effect(sox_find_effect("reverse"));
+			sox_effect_options(e, 0, NULL);
+			sox_add_effect(chain, e, &interm_signal, &out->signal);
+			free(e);
+		}
+		break;
+	}
+	case 2:
+	{
+		e = sox_create_effect(sox_find_effect("silence"));
+		args[0] = "1", args[1] = "0.1", args[2] = "1%", args[0] = "-1", args[1] = "0.1", args[2] = "1%", sox_effect_options(e, 3, args);
+		sox_add_effect(chain, e, &interm_signal, &out->signal);
+		free(e);
+		break;
+	}
+	default:
+		break;
+	}
+
 
 	if (in->signal.rate != out->signal.rate)
 	{
@@ -236,6 +271,7 @@ int main(int argc, const char** argv) {
     int encode = 0;
     int decode = 0;
     int quantize = 0;
+	int silence = 0;
 
 	// ./dump_data -test test_input.s16 test_features.f32
 	// ./dump_data -train input.s16 features.f32 data.u8
@@ -247,7 +283,8 @@ int main(int argc, const char** argv) {
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("t,type", "The processing method is designated as <empty> or 't2'", cxxopts::value<std::string>()->default_value("none"))
+		("t,type", "The processing method is designated as <empty> or 'tacotron2'", cxxopts::value<std::string>()->default_value("none"))
+		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("0"))
 		;
 
 	std::string input, output, mode, type = "none";
@@ -281,6 +318,8 @@ int main(int argc, const char** argv) {
 			training = 0;
 			decode = 1;
 		}
+
+		silence = result["s"].as<int>();
 
 		if (result.count("i") == 0)
 			throw std::exception("no input arg");
@@ -340,7 +379,7 @@ int main(int argc, const char** argv) {
 					if (file.extension() == ".wav")
 					{
 						out.replace_extension(".s16");
-						convert_to(file, out, "sw");			// remove header and resampling
+						convert_to(file, out, "sw", silence);			// remove header and resampling
 					}
 
 					fprintf(stdout, "Merge: %s\n", out.string().c_str());

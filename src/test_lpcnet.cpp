@@ -59,7 +59,7 @@ int main(int argc, char** argv) {
     LPCNetState* net;
     net = lpcnet_create();
 
-    if (argc == 4 && strcmp(argv[1], "-taco") == 0)
+    if (argc == 4 && strcmp(argv[1], "-tacotron2") == 0)
 	{
 		type = 1;
 		in = 2; 
