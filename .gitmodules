@@ -1,6 +1,6 @@
 [submodule "thirdparty/cppglob"]
 	path = thirdparty/cppglob
-	url = https://github.com/nkari82/cppglob.git
+	url = https://github.com/Kogia-sima/cppglob.git
 	branch = master
 [submodule "thirdparty/cxxopts"]
 	path = thirdparty/cxxopts
