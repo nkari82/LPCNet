@@ -29,32 +29,16 @@
 
 import lpcnet
 import sys
+import os
 import numpy as np
-# from keras.optimizers import Adam
-# from keras.callbacks import ModelCheckpoint
-# import keras.backend as K
-
-# tensorflow v2.0
 import datetime
 import tensorflow as tf
+import tensorflow.keras.backend as K
+import h5py
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint
-import tensorflow.keras.backend as K
-
 from ulaw import ulaw2lin, lin2ulaw
-import h5py
 
-import tensorflow as tf
-#from keras.backend.tensorflow_backend import set_session
-#config = tf.ConfigProto()
-
-# use this option to reserve GPU memory, e.g. for running more than
-# one thing at a time.  Best to disable for GPUs with small memory
-#config.gpu_options.per_process_gpu_memory_fraction = 0.44
-
-#set_session(tf.Session(config=config))
-
-#tensorflow v2.0
 gpus = tf.config.experimental.list_physical_devices('GPU')
 print("Num GPUs Available: ", len(gpus))
 if gpus:
@@ -69,7 +53,7 @@ if gpus:
   except RuntimeError as e:
     print(e)
 
-nb_epochs = 120
+nb_epochs = 140
 
 # Try reducing batch_size if you run out of memory on your GPU
 batch_size = 64
@@ -125,27 +109,28 @@ del sig
 del pred
 del in_exc
 
-# dump models to disk as we go
-checkpoint = ModelCheckpoint('lpcnet30_384_10_G16_{epoch:02d}.h5')
-
-#Set this to True to adapt an existing model (e.g. on new data)
-adaptation = False
-
-if adaptation:
-    #Adapting from an existing model
-    model.load_weights('lpcnet24c_384_10_G16_120.h5')
-    sparsify = lpcnet.Sparsify(0, 0, 1, (0.05, 0.05, 0.2))
-    lr = 0.0001
-    decay = 0
-else:
-    #Training from scratch
-    sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
-    lr = 0.001
-    decay = 5e-5
-
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
+checkpoint_path = "training/lpcnet30_384_10_G16_{epoch:02d}.h5"
+checkpoint_dir = os.path.dirname(checkpoint_path)
+
+# dump models to disk as we go
+checkpoint = ModelCheckpoint(filepath=checkpoint_path, verbose=1)
+
+#Training from scratch
+sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
+lr = 0.001
+decay = 5e-5
+initial_epoch = 0
+
+latest = tf.train.latest_checkpoint(checkpoint_dir)
+if latest not None:
+    model.load_weights(checkpoint_path)
+    loss,acc = model.evaluate([in_data, features, periods], verbose=2)
+    initial_epoch = int(latest.split('_')[-1].replace('.h5',''))
+    print("Restored model, accuracy: {:5.2f}%, loss: {}".format(100*acc, loss))
+
 model.compile(optimizer=Adam(lr, amsgrad=True, decay=decay), loss='sparse_categorical_crossentropy')
-model.save_weights('lpcnet30_384_10_G16_00.h5');
+model.save_weights(checkpoint_path.format(epoch=0))
 model.fit([in_data, features, periods], out_exc, batch_size=batch_size, epochs=nb_epochs, validation_split=0.0, callbacks=[checkpoint, sparsify, tensorboard_callback])
