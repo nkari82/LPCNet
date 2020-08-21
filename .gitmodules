@@ -6,3 +6,7 @@
 	path = thirdparty/cxxopts
 	url = https://github.com/jarro2783/cxxopts.git
 	branch = master
+[submodule "thirdparty/sox"]
+	path = thirdparty/sox
+	url = https://github.com/nkari82/sox.git
+	branch = master
