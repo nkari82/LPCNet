@@ -212,7 +212,6 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 		break;
 	}
 
-
 	if (in->signal.rate != out->signal.rate)
 	{
 		e = sox_create_effect(sox_find_effect("rate"));
@@ -271,6 +270,7 @@ int main(int argc, const char** argv) {
     int encode = 0;
     int decode = 0;
     int quantize = 0;
+	int type = 0;
 	int silence = 0;
 
 	// ./dump_data -test test_input.s16 test_features.f32
@@ -283,11 +283,11 @@ int main(int argc, const char** argv) {
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("t,type", "The processing method is designated as <empty> or 'tacotron2'", cxxopts::value<std::string>()->default_value("none"))
+		("t,type", "The processing method is designated as '1' is tacotron2", cxxopts::value<int>()->default_value("0"))
 		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("0"))
 		;
 
-	std::string input, output, mode, type = "none";
+	std::string input, output, mode;
 
 	try
 	{
@@ -318,7 +318,7 @@ int main(int argc, const char** argv) {
 			training = 0;
 			decode = 1;
 		}
-
+		
 		silence = result["s"].as<int>();
 
 		if (result.count("i") == 0)
@@ -329,7 +329,7 @@ int main(int argc, const char** argv) {
 
 		input = result["i"].as<std::string>();
 		output = result["o"].as<std::string>();
-		type = result["t"].as<std::string>();
+		type = result["t"].as<int>();
 
 		if (result.count("help"))
 			throw std::exception("help");
@@ -343,7 +343,7 @@ int main(int argc, const char** argv) {
 		exit(0);
 	}
 
-	fprintf(stdout, "Mode: %s, Type: %s\n", mode.c_str(), type.c_str());
+	fprintf(stdout, "Mode: %s, Type: %d\n", mode.c_str(), type);
 
     st = lpcnet_encoder_create();
 	sox_init();
@@ -413,8 +413,6 @@ int main(int argc, const char** argv) {
 	for (auto& input_file : input_files)
 	{
 		lpcnet_encoder_init(st);
-		if (type == "t2")
-			st->type = 1;
 
 		f1 = fopen(input_file.string().c_str(), "rb");
 		if (f1 == NULL) {
@@ -521,7 +519,7 @@ int main(int argc, const char** argv) {
 			/* Running on groups of 4 frames. */
 			if (st->pcount == 4) {
 				unsigned char buf[8];
-				process_superframe(st, buf, ffeat, encode, quantize);
+				process_superframe(st, buf, ffeat, encode, quantize, type);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
 				st->pcount = 0;
 			}
