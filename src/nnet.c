@@ -31,13 +31,13 @@
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <math.h>
 #include "opus_types.h"
 #include "arch.h"
 #include "common.h"
 #include "tansig_table.h"
 #include "nnet.h"
-#include "nnet_data.h"
 
 #define SOFTMAX_HACK
 
@@ -398,4 +398,49 @@ int sample_from_pdf(const float *pdf, int N, float exp_boost, float pdf_floor)
         if (r <= tmp[i]) return i;
     }
     return N-1;
+}
+
+void read_vector(void** vector, int elemt_size, FILE* f)
+{
+	unsigned int length;
+	fread(&length, sizeof(length), 1, f);
+	*vector = malloc(elemt_size * length);
+	fread(*vector, elemt_size, length, f);
+}
+
+void read_embaded_layer(EmbeddingLayer* layer, FILE* f)
+{
+	read_vector((void**)&layer->embedding_weights, sizeof(float), f);
+	fread(&layer->nb_inputs, sizeof(int), 1, f);
+	fread(&layer->dim, sizeof(int), 1, f);
+}
+
+void read_dense_layer(DenseLayer* layer, FILE* f)
+{
+	read_vector((void**)&layer->input_weights, sizeof(float), f);
+	read_vector((void**)&layer->bias, sizeof(float), f);
+	fread(&layer->nb_inputs, sizeof(int), 1, f);
+	fread(&layer->nb_neurons, sizeof(int), 1, f);
+	fread(&layer->activation, sizeof(int), 1, f);
+}
+
+void read_conv1d_layer(Conv1DLayer* layer, FILE* f)
+{
+	read_vector((void**)&layer->input_weights, sizeof(float), f);
+	read_vector((void**)&layer->bias, sizeof(float), f);
+	fread(&layer->nb_inputs, sizeof(int), 1, f);
+	fread(&layer->kernel_size, sizeof(int), 1, f);
+	fread(&layer->nb_neurons, sizeof(int), 1, f);
+	fread(&layer->activation, sizeof(int), 1, f);
+}
+
+void read_gru_layer(GRULayer* layer, FILE* f)
+{
+	read_vector((void**)&layer->input_weights, sizeof(float), f);
+	read_vector((void**)&layer->recurrent_weights, sizeof(float), f);
+	read_vector((void**)&layer->bias, sizeof(float), f);
+	fread(&layer->nb_inputs, sizeof(int), 1, f);
+	fread(&layer->nb_neurons, sizeof(int), 1, f);
+	fread(&layer->activation, sizeof(int), 1, f);
+	fread(&layer->reset_after, sizeof(int), 1, f);
 }

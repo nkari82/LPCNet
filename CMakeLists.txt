@@ -45,7 +45,6 @@ add_library(lpcnet STATIC
 	src/lpcnet_dec.c
 	src/lpcnet_enc.c
 	src/nnet.c
-	src/nnet_data.c
 	src/ceps_codebooks.c)
 target_include_directories(lpcnet PUBLIC ./include PRIVATE ./src)
 

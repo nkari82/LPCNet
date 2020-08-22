@@ -4,7 +4,7 @@
 #include "common.h"
 #include "freq.h"
 #include "lpcnet.h"
-#include "nnet_data.h"
+#include "nnet.h"
 #include "celt_lpc.h"
 
 #define BITS_PER_CHAR 8
@@ -31,6 +31,8 @@ struct LPCNetState {
     float old_gain[FEATURES_DELAY];
     int frame_count;
     float deemph_mem;
+
+	NNetModel* model;
 };
 
 struct LPCNetDecState {

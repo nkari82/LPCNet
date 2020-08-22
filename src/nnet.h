@@ -109,4 +109,63 @@ void accum_embedding(const EmbeddingLayer *layer, float *output, int input);
 
 int sample_from_pdf(const float *pdf, int N, float exp_boost, float pdf_floor);
 
+void read_vector(void** vector, int elemt_size, FILE* f);
+
+void read_embaded_layer(EmbeddingLayer* layer, FILE* f);
+
+void read_dense_layer(DenseLayer* layer, FILE* f);
+
+void read_conv1d_layer(Conv1DLayer* layer, FILE* f);
+
+void read_gru_layer(GRULayer* layer, FILE* f);
+
+#define GRU_A_EMBED_SIG_OUT_SIZE 1152
+#define GRU_A_EMBED_PRED_OUT_SIZE 1152
+#define GRU_A_EMBED_EXC_OUT_SIZE 1152
+#define GRU_A_DENSE_FEATURE_OUT_SIZE 1152
+#define EMBED_PITCH_OUT_SIZE 64
+#define FEATURE_CONV1_OUT_SIZE 128
+#define FEATURE_CONV1_STATE_SIZE (102*2)
+#define FEATURE_CONV1_DELAY 1
+#define FEATURE_CONV2_OUT_SIZE 128
+#define FEATURE_CONV2_STATE_SIZE (128*2)
+#define FEATURE_CONV2_DELAY 1
+#define FEATURE_DENSE1_OUT_SIZE 128
+#define EMBED_SIG_OUT_SIZE 128
+#define FEATURE_DENSE2_OUT_SIZE 128
+#define GRU_A_OUT_SIZE 384
+#define GRU_A_STATE_SIZE 384
+#define GRU_B_OUT_SIZE 16
+#define GRU_B_STATE_SIZE 16
+#define DUAL_FC_OUT_SIZE 256
+#define SPARSE_GRU_A_OUT_SIZE 384
+#define SPARSE_GRU_A_STATE_SIZE 384
+#define MAX_RNN_NEURONS 384
+#define MAX_CONV_INPUTS 384
+#define MAX_MDENSE_TMP 512
+
+typedef struct {
+	EmbeddingLayer gru_a_embed_sig;
+	EmbeddingLayer gru_a_embed_pred;
+	EmbeddingLayer gru_a_embed_exc;
+	DenseLayer gru_a_dense_feature;
+	EmbeddingLayer embed_pitch;
+	Conv1DLayer feature_conv1;
+	Conv1DLayer feature_conv2;
+	DenseLayer feature_dense1;
+	EmbeddingLayer embed_sig;
+	DenseLayer feature_dense2;
+	GRULayer gru_a;
+	GRULayer gru_b;
+	MDenseLayer dual_fc;
+	SparseGRULayer sparse_gru_a;
+} NNetModel;
+
+typedef struct {
+	float feature_conv1_state[FEATURE_CONV1_STATE_SIZE];
+	float feature_conv2_state[FEATURE_CONV2_STATE_SIZE];
+	float gru_a_state[GRU_A_STATE_SIZE];
+	float gru_b_state[GRU_B_STATE_SIZE];
+} NNetState;
+
 #endif /* _MLP_H_ */
