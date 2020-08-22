@@ -117,7 +117,9 @@ checkpoint_dir = os.path.dirname(checkpoint_path)
 
 
 # dump models to disk as we go
-checkpoint = ModelCheckpoint(filepath=checkpoint_path, verbose=1)
+checkpoint = ModelCheckpoint(filepath=checkpoint_path, 
+                save_weights_only=True,
+                verbose=1)
 
 #Training from scratch
 initial_epoch = 0
@@ -129,8 +131,9 @@ if latest is not None:
     lr = 0.0001
     decay = 0
     initial_epoch = int(latest.split('_')[-1].replace('.ckpt',''))
-    print("Restored model")
-else
+    loss, acc = model.evaluate([in_data, features, periods], verbose=2)
+    print("Restored model: {}, initial epoch: {}, accuracy: {:5.2f}%".format(latest, initial_epoch, 100*acc))
+else:
     sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
     lr = 0.001
     decay = 5e-5
