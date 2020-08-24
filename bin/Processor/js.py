@@ -3,6 +3,7 @@ import sys
 import unicodedata
 import MeCab
 import os
+import numpy as np
 
 #http://pop365.cocolog-nifty.com/blog/2015/03/windows-64bit-m.html
 #pip install mecab-python3
@@ -13,7 +14,10 @@ _eos = "eos"
 _punctuation = [".", ",", "、", "。", "！", "？", "!", "?"]
 _cleaner = [" ", "　", "「", "」", "『", "』", "・", "【", "】","（", "）", "(", ")"]
 _letters = [chr(_) for _ in range(0x30A0, 0x30FF)]  # katakana
-symbols = [_pad] + _punctuation + _letters + [_eos]
+_numbers = "0123456789"
+_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+
+symbols = [_pad] + _punctuation + _letters + list(_alphabet) + list(_numbers) + [_eos]
 
 class JSpeechProcessor(object):
     def __init__(self, data_dir, cleaner_names="", metadata_filename="metadata.csv"):
@@ -78,6 +82,7 @@ class JSpeechProcessor(object):
         text = self._pronunciation(text)
         sequence = self._symbols_to_sequence(text)
         sequence += self._symbols_to_sequence([_eos])
+        return sequence
 
     def sequence_to_text(seq):
         return "".join(chr(n) for n in seq)
