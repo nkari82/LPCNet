@@ -240,6 +240,16 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 	sox_close(in);
 }
 
+void show_help(const cxxopts::Options& options, const char* what = nullptr)
+{
+	std::cout << options.help() << std::endl;
+	std::cout << "usage: ./dump_data --mode train -i ./*.wav or s16 -o ./train" << std::endl;
+	std::cout << "usage: ./dump_data --mode test -i ./train/*.s16 -o ./feats" << std::endl;
+	
+	if(what != nullptr)
+		std::cout << what << std::endl;
+}
+
 int main(int argc, const char** argv) {
     int i;
     int count = 0;
@@ -322,24 +332,30 @@ int main(int argc, const char** argv) {
 		silence = result["s"].as<int>();
 
 		if (result.count("i") == 0)
-			throw std::exception("no input arg");
+		{
+			show_help(options, "no input arg");
+			exit(0);
+		}
 		
 		if (result.count("o") == 0)
-			throw std::exception("no ouput arg");
+		{
+			show_help(options, "no ouput arg");
+			exit(0);
+		}
 
 		input = result["i"].as<std::string>();
 		output = result["o"].as<std::string>();
 		type = result["t"].as<int>();
 
 		if (result.count("help"))
-			throw std::exception("help");
+		{
+			show_help(options);
+			exit(0);
+		}
 	}
 	catch (const std::exception& ex)
 	{
-		std::cout << options.help() << std::endl;
-		std::cout << ex.what() << std::endl;
-		std::cout << "usage: ./dump_data --mode train -i ./*.wav or s16 -o ./train" << std::endl;
-		std::cout << "usage: ./dump_data --mode test -i ./train/*.s16 -o ./feats" << std::endl;
+		show_help(options, ex.what());
 		exit(0);
 	}
 
