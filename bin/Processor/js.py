@@ -2,6 +2,7 @@
 import sys
 import unicodedata
 import MeCab
+import os
 
 #http://pop365.cocolog-nifty.com/blog/2015/03/windows-64bit-m.html
 #pip install mecab-python3
@@ -15,7 +16,7 @@ _letters = [chr(_) for _ in range(0x30A0, 0x30FF)]  # katakana
 symbols = [_pad] + _punctuation + _letters + [_eos]
 
 class JSpeechProcessor(object):
-    def __init__(self, data_dir, cleaner_names, metadata_filename="metadata.csv"):
+    def __init__(self, data_dir, cleaner_names="", metadata_filename="metadata.csv"):
         self._tagger = MeCab.Tagger('')
         self._symbol_to_id = {c: i for i, c in enumerate(symbols)}
         self._id_to_symbol = {i: c for i, c in enumerate(symbols)}
