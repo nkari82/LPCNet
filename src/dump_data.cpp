@@ -243,8 +243,8 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 void show_help(const cxxopts::Options& options, const char* what = nullptr)
 {
 	std::cout << options.help() << std::endl;
-	std::cout << "usage: ./dump_data --mode train -i ./*.wav or s16 -o ./train" << std::endl;
-	std::cout << "usage: ./dump_data --mode test -i ./train/*.s16 -o ./feats" << std::endl;
+	std::cout << "usage: ./dump_data --mode train -i \"./*.wav or s16\" -o ./train" << std::endl;
+	std::cout << "usage: ./dump_data --mode test -i \"./train/*.s16\" -o ./feats" << std::endl;
 	
 	if(what != nullptr)
 		std::cout << what << std::endl;
