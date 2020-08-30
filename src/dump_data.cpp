@@ -33,6 +33,7 @@
 #include <sox.h>
 #if defined(__cplusplus)
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 #include <list>
@@ -152,22 +153,74 @@ static void copy(FILE* from, FILE* to)
 	}
 }
 
+static void test_gain(std::list<fs::path>& input_files)
+{
+	sox_encodinginfo_t combiner_encoding;
+	sox_signalinfo_t combiner_signal;
+	sox_encodinginfo_t out_encoding = { SOX_ENCODING_UNKNOWN, 0, std::numeric_limits<double>::infinity(), sox_option_no, sox_option_no, sox_option_no, sox_false };
+	//sox_signalinfo_t* in_signal = NULL;
+	char* args[10];
+
+	std::list<sox_format_t*> files;
+
+	for(auto& path : input_files)
+	{
+		sox_format_t* in = sox_open_read(path.string().c_str(), NULL, NULL, NULL);
+		if (in != nullptr)
+			files.emplace_back(in);
+	}
+
+	if (files.empty())
+		return;
+
+	//sox_format_t* out = sox_open_write("", NULL, &out_encoding, NULL, NULL, NULL);
+
+	combiner_encoding = files.front()->encoding;
+	combiner_signal = files.front()->signal;
+	
+	sox_format_t* out = sox_open_write("", NULL, &out_encoding, NULL, NULL, NULL);
+
+	sox_effects_chain_t* chain = sox_create_effects_chain(&combiner_encoding, NULL);
+	sox_effect_t* e = sox_create_effect(sox_find_effect("input"));
+	sox_add_effect(chain, e, &combiner_signal, &combiner_signal);
+	free(e);
+
+	e = sox_create_effect(sox_find_effect("stats"));
+	sox_add_effect(chain, e, &combiner_signal, &combiner_signal);
+	free(e);
+
+	e = sox_create_effect(sox_find_effect("output"));
+	args[0] = (char *)out, sox_effect_options(e, 1, args);
+	sox_add_effect(chain, e, &combiner_signal, &combiner_signal);
+	free(e);
+
+	sox_flow_effects(chain, NULL, NULL);
+	sox_delete_effects_chain(chain);
+	//sox_close(out);
+	//sox_close(in);
+}
+
 static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type = "sw", int silence = 0)
 {
 	fprintf(stdout, "Convert: %s\n", in_path.string().c_str());
+	
+	sox_encodinginfo_t out_encoding = 
+	{ 
+		SOX_ENCODING_SIGN2, 
+		16, 
+		std::numeric_limits<double>::infinity(), 
+		sox_option_default, 
+		sox_option_default, 
+		sox_option_default, 
+		sox_false 
+	};
 
-	sox_signalinfo_t interm_signal;
-	sox_encodinginfo_t out_encoding = { SOX_ENCODING_SIGN2, 16, 0, sox_option_default, sox_option_default, sox_option_default, sox_false };
 	sox_signalinfo_t out_signal = { 16000, 1, 16, 0, NULL };
-
-	sox_signalinfo_t default_in_signal = { 16000, 1, 16, 0, NULL };
-	sox_signalinfo_t* in_signal = NULL;
-
-	if (strcmp(type, "wav") == 0)
-		in_signal = &default_in_signal;
+	sox_signalinfo_t in_signal = { 16000, 1, 16, 0, NULL };
+	sox_signalinfo_t interm_signal;
 
 	char* args[10];
-	sox_format_t* in = sox_open_read(in_path.string().c_str(), in_signal, NULL, NULL);
+	sox_format_t* in = sox_open_read(in_path.string().c_str(), (strcmp(type, "wav") == 0) ? NULL : &in_signal, NULL, NULL);
 	sox_format_t* out = sox_open_write(out_path.string().c_str(), &out_signal, &out_encoding, type, NULL, NULL);
 
 	sox_effects_chain_t* chain = sox_create_effects_chain(&in->encoding, &out->encoding);
@@ -359,6 +412,7 @@ int main(int argc, const char** argv) {
 		exit(0);
 	}
 
+
 	fprintf(stdout, "Mode: %s, Type: %d\n", mode.c_str(), type);
 
     st = lpcnet_encoder_create();
@@ -370,6 +424,9 @@ int main(int argc, const char** argv) {
 	std::list<fs::path> input_files(it, end);
 	fs::create_directories(output_path);
 	
+	//test_gain(input_files);
+	//return 0;
+
 	if (training)
 	{
 		// create training merged data
