@@ -153,7 +153,7 @@ static void copy(FILE* from, FILE* to)
 	}
 }
 
-static void test_gain(std::list<fs::path>& input_files, const char* type = "wav")
+static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_files)
 {
 	sox_encodinginfo_t out_encoding =
 	{
@@ -168,11 +168,13 @@ static void test_gain(std::list<fs::path>& input_files, const char* type = "wav"
 
 	sox_signalinfo_t in_signal = { 16000, 1, 16, 0, NULL };
 	sox_signalinfo_t interm_signal;
-	
+	double rms_pk_lev_dB = 0.0;
+
 	char* args[10];
 	for(auto& path : input_files)
 	{
-		sox_format_t* in = sox_open_read(path.string().c_str(), (strcmp(type, "wav") == 0) ? NULL : &in_signal, NULL, NULL);
+		auto in_ext = path.filename().extension();
+		sox_format_t* in = sox_open_read(path.string().c_str(), (in_ext == ".wav") ? NULL : &in_signal, NULL, NULL);
 		sox_format_t* out = sox_open_write("", &in->signal, &in->encoding, "null", NULL, NULL);
 		interm_signal = in->signal; /* NB: deep copy */
 
@@ -193,19 +195,46 @@ static void test_gain(std::list<fs::path>& input_files, const char* type = "wav"
 		free(e);
 
 		sox_flow_effects(chain, NULL, NULL);
-		char buf[1024]{0};
-		setbuf(stderr, buf);	// capture
+
+		char buf[512]{ 0 };
+		std::setvbuf(stderr, buf, _IOLBF, sizeof(buf));
 		sox_delete_effects_chain(chain);
-		setbuf(stderr, nullptr);
+
+		std::stringstream ss(buf);
+		std::string to;
+		float pk_lev_dB(0.f);
+		if (buf != nullptr)
+		{
+			while (std::getline(ss, to, '\n')) 
+			{
+				if (to.find("Pk lev dB") == 0)
+				{
+					to.replace(0, strlen("Pk lev dB"), "");
+					pk_lev_dB = std::stof(to);
+					break;
+				}
+			}
+		}
+		
+		rms_pk_lev_dB += (pk_lev_dB * pk_lev_dB);
+
+		std::memset(buf, 0, 512);
+		std::setvbuf(stderr, buf, _IOLBF, sizeof(buf));
+		std::setvbuf(stderr, nullptr, _IONBF, 0);
+
 		sox_close(out);
 		sox_close(in);
 	}
+
+	rms_pk_lev_dB = std::sqrt(rms_pk_lev_dB / (double)input_files.size());
+	norm_gain = (float)rms_pk_lev_dB;
+	fprintf(stdout, "RMS Pk lev dB: %f\n", rms_pk_lev_dB);
 }
 
-static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type = "sw", int silence = 0)
+static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type, int silence, float gain)
 {
+	auto in_ext = in_path.filename().extension();
 	fprintf(stdout, "Convert: %s\n", in_path.string().c_str());
-	
 	sox_encodinginfo_t out_encoding = 
 	{ 
 		SOX_ENCODING_SIGN2, 
@@ -222,7 +251,7 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 	sox_signalinfo_t interm_signal;
 
 	char* args[10];
-	sox_format_t* in = sox_open_read(in_path.string().c_str(), (strcmp(type, "wav") == 0) ? NULL : &in_signal, NULL, NULL);
+	sox_format_t* in = sox_open_read(in_path.string().c_str(), (in_ext == ".wav") ? NULL : &in_signal, NULL, NULL);
 	sox_format_t* out = sox_open_write(out_path.string().c_str(), &out_signal, &out_encoding, type, NULL, NULL);
 	interm_signal = in->signal; /* NB: deep copy */
 
@@ -231,6 +260,15 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 	args[0] = (char *)in, sox_effect_options(e, 1, args);
 	sox_add_effect(chain, e, &interm_signal, &in->signal);
 	free(e);
+
+	if (gain != std::numeric_limits<float>::max())
+	{
+		std::string option = std::to_string(gain);
+		e = sox_create_effect(sox_find_effect("gain"));
+		args[0] = (char*)option.c_str(), sox_effect_options(e, 1, args);
+		sox_add_effect(chain, e, &interm_signal, &out->signal);
+		free(e);
+	}
 
 	// https://digitalcardboard.com/blog/2009/08/25/the-sox-of-silence/comment-page-2/
 	// Trimming all (silence 1 0.1 1% -1 0.1 1%)
@@ -297,8 +335,8 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 void show_help(const cxxopts::Options& options, const char* what = nullptr)
 {
 	std::cout << options.help() << std::endl;
-	std::cout << "usage: ./dump_data --mode train -i \"./*.wav or s16\" -o ./train" << std::endl;
-	std::cout << "usage: ./dump_data --mode test -i \"./train/*.s16\" -o ./feats" << std::endl;
+	std::cout << "usage: ./dump_data --m train -i \"./*.wav or s16\" -o ./train" << std::endl;
+	std::cout << "usage: ./dump_data --m test -i \"./train/*.s16\" -o ./feats" << std::endl;
 	
 	if(what != nullptr)
 		std::cout << what << std::endl;
@@ -336,12 +374,8 @@ int main(int argc, const char** argv) {
     int quantize = 0;
 	int type = 0;
 	int silence = 0;
+	int norm = 0;
 
-	// ./dump_data -test test_input.s16 test_features.f32
-	// ./dump_data -train input.s16 features.f32 data.u8
-	// ./dump_data -mode train -i input.s16 -o data.f32
-	// ./dump_data -mode test -i *.s16
-	// ./dump_data -m test -i input.s16 -o
 	cxxopts::Options options("dump_data", "LPCNet program");
 	options.add_options()
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
@@ -349,6 +383,7 @@ int main(int argc, const char** argv) {
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
 		("t,type", "The processing method is designated as '1' is tacotron2", cxxopts::value<int>()->default_value("0"))
 		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("0"))
+		("n,norm", "Normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
 		;
 
 	std::string input, output, mode;
@@ -400,6 +435,7 @@ int main(int argc, const char** argv) {
 		input = result["i"].as<std::string>();
 		output = result["o"].as<std::string>();
 		type = result["t"].as<int>();
+		norm = result["n"].as<int>();
 
 		if (result.count("help"))
 		{
@@ -413,7 +449,6 @@ int main(int argc, const char** argv) {
 		exit(0);
 	}
 
-
 	fprintf(stdout, "Mode: %s, Type: %d\n", mode.c_str(), type);
 
     st = lpcnet_encoder_create();
@@ -425,59 +460,50 @@ int main(int argc, const char** argv) {
 	std::list<fs::path> input_files(it, end);
 	fs::create_directories(output_path);
 	
-	//test_gain(input_files);
-	//return 0;
+	float gain(std::numeric_limits<float>::max());
+	if (norm)
+	{
+		std::string ext = input_path.filename().extension().string();
+		calc_norm_gain(gain, input_files);
+	}
 
 	if (training)
 	{
 		// create training merged data
-		if (input_files.size() > 1)
-		{
-			auto parent = input_path.parent_path();
-			if (parent.string() == "" || parent.string() == ".")
-				parent = fs::current_path();
+		auto parent = input_path.parent_path();
+		if (parent.string() == "" || parent.string() == ".")
+			parent = fs::current_path();
 
-			auto parent_path =  parent.string();
-			auto parent_name = parent.filename().string();
+		auto parent_path =  parent.string();
+		auto parent_name = parent.filename().string();
 
-			fs::path merge = output_path;
-			merge.append(parent_name + ".s16.merge");
+		fs::path merge = output_path;
+		merge.append(parent_name + ".s16.merge");
 
-			f1 = fopen(merge.string().c_str(), "wb");
-			if (f1) {
-				for (auto& file : input_files)
-				{
-					fs::path out = output_path;
-					out.append(file.filename().string());
-
-					if (file.extension() == ".wav")
-					{
-						out.replace_extension(".s16");
-						convert_to(file, out, "sw", silence);			// remove header and resampling
-					}
-
-					fprintf(stdout, "Merge: %s\n", out.string().c_str());
-					FILE* to = fopen(out.string().c_str(), "rb");
-					assert(to);
-					if (to) {
-						copy(to, f1);
-						fclose(to);
-					}
-				}
-				fclose(f1);
-				input_path = merge;
-			}
-		}
-		else
-		{
-			if (input_path.extension() == ".wav")
+		f1 = fopen(merge.string().c_str(), "wb");
+		if (f1) {
+			for (auto& file : input_files)
 			{
 				fs::path out = output_path;
-				out.append(input_path.filename().string());
-				out.replace_extension(".s16");
-				convert_to(input_path, out);		// remove header and resampling
-				input_path = out;
+				out.append(file.filename().string());
+
+				auto in_ext = file.filename().extension();
+				if (in_ext == ".wav")
+				{
+					out.replace_extension(".s16");
+					convert_to(file, out, "sw", silence, gain);
+				}
+
+				fprintf(stdout, "Merge: %s\n", out.string().c_str());
+				FILE* to = fopen(out.string().c_str(), "rb");
+				assert(to);
+				if (to) {
+					copy(to, f1);
+					fclose(to);
+				}
 			}
+			fclose(f1);
+			input_path = merge;
 		}
 
 		input_files.clear();
