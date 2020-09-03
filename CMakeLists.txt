@@ -33,6 +33,10 @@ add_subdirectory(./thirdparty/sox)
 list(APPEND EXTRA_LIBS libsox lpc10)
 list(APPEND EXTRA_INCLUDES "./thirdparty/sox/src")
 
+add_subdirectory(./thirdparty/world)
+list(APPEND EXTRA_LIBS world)
+list(APPEND EXTRA_INCLUDES "./thirdparty/world/src")
+
 list(APPEND EXTRA_INCLUDES "./thirdparty/cxxopts/include")
   
 add_library(lpcnet STATIC
