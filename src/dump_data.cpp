@@ -31,7 +31,6 @@
 #include <math.h>
 #include <assert.h>
 #include <sox.h>
-#if defined(__cplusplus)
 #include <iostream>
 #include <limits>
 #include <string>
@@ -41,27 +40,26 @@
 #include <type_traits>
 
 #ifdef __has_include
-#  if __has_include(<filesystem>)
-#    include <filesystem>
-	  namespace fs = std::filesystem;
-#  elif __has_include(<experimental/filesystem>)
-#    include <experimental/filesystem>
-	  namespace fs = std::experimental::filesystem;
-#  else
-	  static_assert(false, "must include filesystem!");
-#  endif
+#if __has_include(<filesystem>)
+#include <filesystem>
+namespace fs = std::filesystem;
+#elif __has_include(<experimental/filesystem>)
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+static_assert(false, "must include filesystem!");
+#endif
 #endif
 
 #define CPPGLOB_STATIC
-#include <cppglob/glob.hpp>  // cppglob::glob
-#include <cppglob/iglob.hpp>  // cppglob::iglob
-
-//#define CXXOPTS_NO_EXCEPTIONS
+#include <cppglob/glob.hpp>
+#include <cppglob/iglob.hpp>
 #include <cxxopts.hpp>
+#include <world/dio.h>
+#include <world/stonemask.h>
 
 extern "C"
 {
-#endif
 #include "kiss_fft.h"
 #include "common.h"
 #include "freq.h"
@@ -70,76 +68,74 @@ extern "C"
 #include "celt_lpc.h"
 #include "lpcnet.h"
 #include "lpcnet_private.h"
-#if defined(__cplusplus)
 }
-#endif
 
 static void biquad(float* y, float mem[2], const float* x, const float* b, const float* a, int N) {
-    int i;
-    for (i = 0; i < N; i++) {
-        float xi, yi;
-        xi = x[i];
-        yi = x[i] + mem[0];
-        mem[0] = mem[1] + (b[0] * (double)xi - a[0] * (double)yi);
-        mem[1] = (b[1] * (double)xi - a[1] * (double)yi);
-        y[i] = yi;
-    }
+	int i;
+	for (i = 0; i < N; i++) {
+		float xi, yi;
+		xi = x[i];
+		yi = x[i] + mem[0];
+		mem[0] = mem[1] + (b[0] * (double)xi - a[0] * (double)yi);
+		mem[1] = (b[1] * (double)xi - a[1] * (double)yi);
+		y[i] = yi;
+	}
 }
 
 static float uni_rand() {
-    return rand() / (double)RAND_MAX - .5;
+	return rand() / (double)RAND_MAX - .5;
 }
 
 static void rand_resp(float* a, float* b) {
-    a[0] = .75 * uni_rand();
-    a[1] = .75 * uni_rand();
-    b[0] = .75 * uni_rand();
-    b[1] = .75 * uni_rand();
+	a[0] = .75 * uni_rand();
+	a[1] = .75 * uni_rand();
+	b[0] = .75 * uni_rand();
+	b[1] = .75 * uni_rand();
 }
 
 void compute_noise(int* noise, float noise_std) {
-    int i;
-    for (i = 0; i < FRAME_SIZE; i++) {
-        noise[i] = (int)floor(.5 + noise_std * .707 * (log_approx((float)rand() / RAND_MAX) - log_approx((float)rand() / RAND_MAX)));
-    }
+	int i;
+	for (i = 0; i < FRAME_SIZE; i++) {
+		noise[i] = (int)floor(.5 + noise_std * .707 * (log_approx((float)rand() / RAND_MAX) - log_approx((float)rand() / RAND_MAX)));
+	}
 }
 
 
 void write_audio(LPCNetEncState* st, const short* pcm, const int* noise, FILE* file) {
-    int i, k;
-    for (k = 0; k < 4; k++) {
-        unsigned char data[4 * FRAME_SIZE];
-        for (i = 0; i < FRAME_SIZE; i++) {
-            float p = 0;
-            float e;
-            int j;
-            for (j = 0; j < LPC_ORDER; j++) p -= st->features[k][2 * NB_BANDS + 3 + j] * st->sig_mem[j];
-            e = lin2ulaw(pcm[k * FRAME_SIZE + i] - p);
-            /* Signal. */
-            data[4 * i] = lin2ulaw(st->sig_mem[0]);
-            /* Prediction. */
-            data[4 * i + 1] = lin2ulaw(p);
-            /* Excitation in. */
-            data[4 * i + 2] = st->exc_mem;
-            /* Excitation out. */
-            data[4 * i + 3] = e;
-            /* Simulate error on excitation. */
-            e += noise[k * FRAME_SIZE + i];
-            e = IMIN(255, IMAX(0, e));
+	int i, k;
+	for (k = 0; k < 4; k++) {
+		unsigned char data[4 * FRAME_SIZE];
+		for (i = 0; i < FRAME_SIZE; i++) {
+			float p = 0;
+			float e;
+			int j;
+			for (j = 0; j < LPC_ORDER; j++) p -= st->features[k][2 * NB_BANDS + 3 + j] * st->sig_mem[j];
+			e = lin2ulaw(pcm[k * FRAME_SIZE + i] - p);
+			/* Signal. */
+			data[4 * i] = lin2ulaw(st->sig_mem[0]);
+			/* Prediction. */
+			data[4 * i + 1] = lin2ulaw(p);
+			/* Excitation in. */
+			data[4 * i + 2] = st->exc_mem;
+			/* Excitation out. */
+			data[4 * i + 3] = e;
+			/* Simulate error on excitation. */
+			e += noise[k * FRAME_SIZE + i];
+			e = IMIN(255, IMAX(0, e));
 
-            RNN_MOVE(&st->sig_mem[1], &st->sig_mem[0], LPC_ORDER - 1);
-            st->sig_mem[0] = p + ulaw2lin(e);
-            st->exc_mem = e;
-        }
-        fwrite(data, 4 * FRAME_SIZE, 1, file);
-    }
+			RNN_MOVE(&st->sig_mem[1], &st->sig_mem[0], LPC_ORDER - 1);
+			st->sig_mem[0] = p + ulaw2lin(e);
+			st->exc_mem = e;
+		}
+		fwrite(data, 4 * FRAME_SIZE, 1, file);
+	}
 }
 
 static short float2short(float x)
 {
-    int i;
-    i = (int)floor(.5 + x);
-    return IMAX(-32767, IMIN(32767, i));
+	int i;
+	i = (int)floor(.5 + x);
+	return IMAX(-32767, IMIN(32767, i));
 }
 
 static void copy(FILE* from, FILE* to)
@@ -171,7 +167,7 @@ static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_fi
 	double rms_pk_lev_dB = 0.0;
 
 	char* args[10];
-	for(auto& path : input_files)
+	for (auto& path : input_files)
 	{
 		auto in_ext = path.filename().extension();
 		sox_format_t* in = sox_open_read(path.string().c_str(), (in_ext == ".wav") ? NULL : &in_signal, NULL, NULL);
@@ -205,7 +201,7 @@ static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_fi
 		float pk_lev_dB(0.f);
 		if (buf != nullptr)
 		{
-			while (std::getline(ss, to, '\n')) 
+			while (std::getline(ss, to, '\n'))
 			{
 				if (to.find("Pk lev dB") == 0)
 				{
@@ -215,7 +211,7 @@ static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_fi
 				}
 			}
 		}
-		
+
 		rms_pk_lev_dB += (pk_lev_dB * pk_lev_dB);
 
 		std::memset(buf, 0, 512);
@@ -235,15 +231,15 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 {
 	auto in_ext = in_path.filename().extension();
 	fprintf(stdout, "Convert: %s\n", in_path.string().c_str());
-	sox_encodinginfo_t out_encoding = 
-	{ 
-		SOX_ENCODING_SIGN2, 
-		16, 
-		std::numeric_limits<double>::infinity(), 
-		sox_option_default, 
-		sox_option_default, 
-		sox_option_default, 
-		sox_false 
+	sox_encodinginfo_t out_encoding =
+	{
+		SOX_ENCODING_SIGN2,
+		16,
+		std::numeric_limits<double>::infinity(),
+		sox_option_default,
+		sox_option_default,
+		sox_option_default,
+		sox_false
 	};
 
 	sox_signalinfo_t out_signal = { 16000, 1, 16, 0, NULL };
@@ -337,41 +333,51 @@ void show_help(const cxxopts::Options& options, const char* what = nullptr)
 	std::cout << options.help() << std::endl;
 	std::cout << "usage: ./dump_data --m train -i \"./*.wav or s16\" -o ./train" << std::endl;
 	std::cout << "usage: ./dump_data --m test -i \"./train/*.s16\" -o ./feats" << std::endl;
-	
-	if(what != nullptr)
+
+	if (what != nullptr)
 		std::cout << what << std::endl;
 }
 
+/*
+LPCNet acoustic feature
+features[:18] : 18-dim Bark scale cepstrum
+features[18:36] : Not used
+features[36:37] : pitch period
+features[37:38] : pitch correlation
+features[39:55] : LPC
+window_size (=n_fft) = 320 (20ms)
+frame_shift(=hop_size) = 160 (10ms)
+*/
 int main(int argc, const char** argv) {
-    int i;
-    int count = 0;
-    static const float a_hp[2] = { -1.99599, 0.99600 };
-    static const float b_hp[2] = { -2, 1 };
-    float a_sig[2] = { 0 };
-    float b_sig[2] = { 0 };
-    float mem_hp_x[2] = { 0 };
-    float mem_resp_x[2] = { 0 };
-    float mem_preemph = 0;
-    float x[FRAME_SIZE];
-    int gain_change_count = 0;
-    FILE* f1;
-    FILE* ffeat;
-    FILE* fpcm = NULL;
-    short pcm[FRAME_SIZE] = { 0 };
-    short pcmbuf[FRAME_SIZE * 4] = { 0 };
-    int noisebuf[FRAME_SIZE * 4] = { 0 };
-    short tmp[FRAME_SIZE] = { 0 };
-    float savedX[FRAME_SIZE] = { 0 };
-    float speech_gain = 1;
-    int last_silent = 1;
-    float old_speech_gain = 1;
-    int one_pass_completed = 0;
-    LPCNetEncState* st;
-    float noise_std = 0;
-    int training = -1;
-    int encode = 0;
-    int decode = 0;
-    int quantize = 0;
+	int i;
+	int count = 0;
+	static const float a_hp[2] = { -1.99599, 0.99600 };
+	static const float b_hp[2] = { -2, 1 };
+	float a_sig[2] = { 0 };
+	float b_sig[2] = { 0 };
+	float mem_hp_x[2] = { 0 };
+	float mem_resp_x[2] = { 0 };
+	float mem_preemph = 0;
+	float x[FRAME_SIZE];
+	int gain_change_count = 0;
+	FILE* f1;
+	FILE* ffeat;
+	FILE* fpcm = NULL;
+	short pcm[FRAME_SIZE] = { 0 };
+	short pcmbuf[FRAME_SIZE * 4] = { 0 };
+	int noisebuf[FRAME_SIZE * 4] = { 0 };
+	short tmp[FRAME_SIZE] = { 0 };
+	float savedX[FRAME_SIZE] = { 0 };
+	float speech_gain = 1;
+	int last_silent = 1;
+	float old_speech_gain = 1;
+	int one_pass_completed = 0;
+	LPCNetEncState* st;
+	float noise_std = 0;
+	int training = -1;
+	int encode = 0;
+	int decode = 0;
+	int quantize = 0;
 	int type = 0;
 	int silence = 0;
 	int norm = 0;
@@ -417,7 +423,7 @@ int main(int argc, const char** argv) {
 			training = 0;
 			decode = 1;
 		}
-		
+
 		silence = result["s"].as<int>();
 
 		if (result.count("i") == 0)
@@ -425,7 +431,7 @@ int main(int argc, const char** argv) {
 			show_help(options, "no input arg");
 			exit(0);
 		}
-		
+
 		if (result.count("o") == 0)
 		{
 			show_help(options, "no ouput arg");
@@ -451,7 +457,7 @@ int main(int argc, const char** argv) {
 
 	fprintf(stdout, "Mode: %s, Type: %d\n", mode.c_str(), type);
 
-    st = lpcnet_encoder_create();
+	st = lpcnet_encoder_create();
 	sox_init();
 
 	fs::path input_path(input);
@@ -459,7 +465,7 @@ int main(int argc, const char** argv) {
 	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
 	std::list<fs::path> input_files(it, end);
 	fs::create_directories(output_path);
-	
+
 	float gain(std::numeric_limits<float>::max());
 	if (norm)
 	{
@@ -474,7 +480,7 @@ int main(int argc, const char** argv) {
 		if (parent.string() == "" || parent.string() == ".")
 			parent = fs::current_path();
 
-		auto parent_path =  parent.string();
+		auto parent_path = parent.string();
 		auto parent_name = parent.filename().string();
 
 		fs::path merge = output_path;
@@ -495,11 +501,10 @@ int main(int argc, const char** argv) {
 				}
 
 				fprintf(stdout, "Merge: %s\n", out.string().c_str());
-				FILE* to = fopen(out.string().c_str(), "rb");
-				assert(to);
-				if (to) {
-					copy(to, f1);
-					fclose(to);
+				FILE* f = fopen(out.string().c_str(), "rb");
+				if (f) {
+					copy(f, f1);
+					fclose(f);
 				}
 			}
 			fclose(f1);
@@ -513,13 +518,14 @@ int main(int argc, const char** argv) {
 	for (auto& input_file : input_files)
 	{
 		lpcnet_encoder_init(st);
+		count = 0;
 
 		f1 = fopen(input_file.string().c_str(), "rb");
 		if (f1 == NULL) {
 			fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
 			exit(1);
 		}
-		
+
 		fs::path ffeat_path = output_path;
 		ffeat_path.append(input_file.filename().string());
 		ffeat_path.replace_extension(".f32");
@@ -615,6 +621,7 @@ int main(int argc, const char** argv) {
 			if (fpcm) {
 				compute_noise(&noisebuf[st->pcount * FRAME_SIZE], noise_std);
 			}
+
 			st->pcount++;
 			/* Running on groups of 4 frames. */
 			if (st->pcount == 4) {
@@ -623,16 +630,51 @@ int main(int argc, const char** argv) {
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
 				st->pcount = 0;
 			}
+
 			//if (fpcm) fwrite(pcm, sizeof(short), FRAME_SIZE, fpcm);
 			for (i = 0; i < TRAINING_OFFSET; i++) pcm[i] = float2short(x[i + FRAME_SIZE - TRAINING_OFFSET]);
 			old_speech_gain = speech_gain;
 			count++;
 		}
+
+		if(!training)
+		{
+			int length = count * FRAME_SIZE;
+			assert(length <= ftell(f1));
+			std::vector<short> data;
+			std::vector<double> norm;
+			std::vector<double> f0;
+			std::vector<double> t;
+
+			data.resize(length);
+			norm.resize(length);
+			f0.resize(count + 1);
+			t.resize(count + 1);
+
+			fseek(f1, 0, SEEK_SET);
+			fread(&data.front(), sizeof(short), length, f1);
+			for (i = 0; i < length; ++i)
+			{
+				norm[i] = ((double)data[i]) / (double)32768;
+				std::clamp(norm[i], -1.0, 1.0);
+			}
+
+			DioOption option;
+			option.f0_floor = 80.0;
+			option.f0_ceil = 7600.0;
+			option.channels_in_octave = 2.0;
+			option.frame_period = 10.0;
+			option.speed = 1;
+			option.allowed_range = 0.1;
+			Dio(&norm.front(), length, 16000, &option, &t.front(), &f0.front());
+			StoneMask(&norm.front(), length, 16000, &t.front(), &f0.front(), f0.size(), &f0.front());
+		}
+
 		fclose(f1);
 		fclose(ffeat);
 		if (fpcm) fclose(fpcm);
 	}
-    lpcnet_encoder_destroy(st);
+	lpcnet_encoder_destroy(st);
 	sox_quit();
-    return 0;
+	return 0;
 }
