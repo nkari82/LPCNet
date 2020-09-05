@@ -554,7 +554,7 @@ void compute_frame_features(LPCNetEncState *st, const float *in) {
   }
 }
 
-void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int encode, int quantize, int type) {
+void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int encode, int quantize, int format) {
   int i;
   int sub;
   int best_i;
@@ -706,7 +706,7 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int
     bits_pack(&bits, interp_id, 3);
     if (ffeat) fwrite(buf, 1, 8, ffeat);
   } else if (ffeat) {
-	  switch (type) {
+	  switch (format) {
 	  case 1: {
 		  for (i = 0; i < 4; i++) {
 			fwrite(st->features[i], sizeof(float), NB_BANDS, ffeat);

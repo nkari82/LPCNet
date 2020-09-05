@@ -372,7 +372,7 @@ int main(int argc, const char** argv) {
     int encode = 0;
     int decode = 0;
     int quantize = 0;
-	int type = 0;
+	int format = 0;
 	int silence = 0;
 	int norm = 0;
 
@@ -381,8 +381,8 @@ int main(int argc, const char** argv) {
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("t,type", "The processing method is designated as '1' is tacotron2", cxxopts::value<int>()->default_value("0"))
-		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("0"))
+		("f,format", "If '1', the output format is 'bark bands[18] + pitch + gain' (default: 0)", cxxopts::value<int>()->default_value("0"))
+		("s,silent", "Silent section trim, '1' is begin and end, '2' is all (default: 1)", cxxopts::value<int>()->default_value("1"))
 		("n,norm", "Normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
 		;
 
@@ -434,7 +434,7 @@ int main(int argc, const char** argv) {
 
 		input = result["i"].as<std::string>();
 		output = result["o"].as<std::string>();
-		type = result["t"].as<int>();
+		format = result["f"].as<int>();
 		norm = result["n"].as<int>();
 
 		if (result.count("help"))
@@ -449,7 +449,15 @@ int main(int argc, const char** argv) {
 		exit(0);
 	}
 
-	fprintf(stdout, "Mode: %s, Type: %d\n", mode.c_str(), type);
+	fprintf(stdout, "Mode: %s \n", mode.c_str());
+	switch (format)
+	{
+	case 1:
+		fprintf(stdout, "the output format is 'bark bands[18] + pitch + gain'\n");
+		break;
+	default:
+		break;
+	}
 
     st = lpcnet_encoder_create();
 	sox_init();
@@ -620,7 +628,7 @@ int main(int argc, const char** argv) {
 			/* Running on groups of 4 frames. */
 			if (st->pcount == 4) {
 				unsigned char buf[8];
-				process_superframe(st, buf, ffeat, encode, quantize, type);
+				process_superframe(st, buf, ffeat, encode, quantize, format);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
 				st->pcount = 0;
 			}
