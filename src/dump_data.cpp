@@ -616,15 +616,14 @@ int main(int argc, const char** argv) {
 			/* PCM is delayed by 1/2 frame to make the features centered on the frames. */
 			for (i = 0; i < FRAME_SIZE - TRAINING_OFFSET; i++) pcm[i + TRAINING_OFFSET] = float2short(x[i]);
 			compute_frame_features(st, x);
-
-			RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
+			
 			if (fpcm) {
+				RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
 				compute_noise(&noisebuf[st->pcount * FRAME_SIZE], noise_std);
 			}
 
-			st->pcount++;
 			/* Running on groups of 4 frames. */
-			if (st->pcount == 4) {
+			if (++st->pcount == 4) {
 				unsigned char buf[8];
 				process_superframe(st, buf, ffeat, encode, quantize, type);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
@@ -640,7 +639,7 @@ int main(int argc, const char** argv) {
 		if(!training)
 		{
 			int length = count * FRAME_SIZE;
-			assert(length <= ftell(f1));
+			assert(length <= (ftell(f1) / sizeof(short)));
 			std::vector<short> data;
 			std::vector<double> norm;
 			std::vector<double> f0;
@@ -656,7 +655,7 @@ int main(int argc, const char** argv) {
 			for (i = 0; i < length; ++i)
 			{
 				norm[i] = ((double)data[i]) / (double)32768;
-				std::clamp(norm[i], -1.0, 1.0);
+				norm[i] = std::clamp(norm[i], -1.0, 1.0);
 			}
 
 			DioOption option;
