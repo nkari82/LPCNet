@@ -513,6 +513,7 @@ int main(int argc, const char** argv) {
 	for (auto& input_file : input_files)
 	{
 		lpcnet_encoder_init(st);
+		count = 0;
 
 		f1 = fopen(input_file.string().c_str(), "rb");
 		if (f1 == NULL) {
@@ -610,9 +611,9 @@ int main(int argc, const char** argv) {
 			/* PCM is delayed by 1/2 frame to make the features centered on the frames. */
 			for (i = 0; i < FRAME_SIZE - TRAINING_OFFSET; i++) pcm[i + TRAINING_OFFSET] = float2short(x[i]);
 			compute_frame_features(st, x);
-
-			RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
+			
 			if (fpcm) {
+				RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
 				compute_noise(&noisebuf[st->pcount * FRAME_SIZE], noise_std);
 			}
 			st->pcount++;
