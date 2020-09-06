@@ -620,9 +620,9 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, FIL
   }
   frame_corr /= 8;
   if (quantize && frame_corr < 0) frame_corr = 0;
-  for (sub=0;sub<8;sub++) {
-    //printf("%d %f\n", best[2+sub], frame_corr);
-  }
+  //for (sub=0;sub<8;sub++) {
+  //  printf("%d %f\n", best[2+sub], frame_corr);
+  //}
   //printf("\n");
   for (sub=2;sub<10;sub++) {
     w = st->frame_weight[sub];
@@ -729,7 +729,7 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, FIL
 	  for (i = 0; i < 4; i++) {
 		fwrite(st->features[i] + (NB_BANDS * 2), sizeof(float), 1, ff0);
 		fwrite(st->features[i] + (NB_BANDS * 2) + 1, sizeof(float), 1, fg);
-		//fprintf(stdout, "%f\n", *(st->features[i] + (NB_BANDS * 2)));
+		//fprintf(stdout, "%f\n", *(st->features[i] + (NB_BANDS * 2) + 1));
 	  }
   }
 
