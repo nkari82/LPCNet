@@ -1,1 +1,0 @@
-ffmpeg -f s16le -ar 16k -ac 1 -i tsuchiya_happy_001.s16 test-out.wav
