@@ -383,18 +383,25 @@ int main(int argc, const char** argv) {
 	int format = 0;
 	int silence = 0;
 	int norm = 0;
+	std::string input;
+	std::string output;
+	std::string mode;
 
 	cxxopts::Options options("dump_data", "LPCNet program");
 	options.add_options()
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("f,format", "If '1', the output format is 'bark bands[18] + pitch + gain' (default: 0)", cxxopts::value<int>()->default_value("0"))
-		("s,silent", "Silent section trim, '1' is begin and end, '2' is all (default: 1)", cxxopts::value<int>()->default_value("1"))
+		("f,format", "If '1', the output format is 'bark bands[18] + pitch + gain'", cxxopts::value<int>()->default_value("0"))
+		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("1"))
 		("n,norm", "Normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
 		;
 
-	std::string input, output, mode;
+	if (argc < 2)
+	{
+		show_help(options);
+		exit(0);
+	}
 
 	try
 	{
