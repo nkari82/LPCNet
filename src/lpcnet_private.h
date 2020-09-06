@@ -55,6 +55,7 @@ struct LPCNetEncState{
   float lpc[LPC_ORDER];
   float vq_mem[NB_BANDS];
   float features[4][NB_TOTAL_FEATURES];
+  float energy[4];
   float sig_mem[LPC_ORDER];
   int exc_mem;
 };
@@ -69,7 +70,7 @@ void preemphasis(float *y, float *mem, const float *x, float coef, int N);
 
 void perform_double_interp(float features[4][NB_TOTAL_FEATURES], const float *mem, int best_id);
 
-void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int encode, int quantize, int type);
+void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, FILE *ff0, FILE *fg, FILE *fe, int encode, int quantize, int type);
 
 void compute_frame_features(LPCNetEncState *st, const float *in);
 

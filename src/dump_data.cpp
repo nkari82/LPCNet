@@ -234,7 +234,7 @@ static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_fi
 static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type, int silence, float gain)
 {
 	auto in_ext = in_path.filename().extension();
-	fprintf(stdout, "Convert: %s\n", in_path.string().c_str());
+	fprintf(stdout, "Convert: %s\r", in_path.string().c_str());
 	sox_encodinginfo_t out_encoding = 
 	{ 
 		SOX_ENCODING_SIGN2, 
@@ -336,7 +336,7 @@ void show_help(const cxxopts::Options& options, const char* what = nullptr)
 {
 	std::cout << options.help() << std::endl;
 	std::cout << "usage: ./dump_data --m train -i \"./*.wav or s16\" -o ./train" << std::endl;
-	std::cout << "usage: ./dump_data --m test -i \"./train/*.s16\" -o ./feats" << std::endl;
+	std::cout << "usage: ./dump_data --m test -i \"./train/*.s16\" -o ./dump" << std::endl;
 	
 	if(what != nullptr)
 		std::cout << what << std::endl;
@@ -357,6 +357,9 @@ int main(int argc, const char** argv) {
     FILE* f1;
     FILE* ffeat;
     FILE* fpcm = NULL;
+	FILE* ff0 = NULL;
+	FILE* fg = NULL;
+	FILE* fe = NULL;
     short pcm[FRAME_SIZE] = { 0 };
     short pcmbuf[FRAME_SIZE * 4] = { 0 };
     int noisebuf[FRAME_SIZE * 4] = { 0 };
@@ -464,9 +467,27 @@ int main(int argc, const char** argv) {
 
 	fs::path input_path(input);
 	fs::path output_path(output);
+	fs::path output_path_feats(output);
+	fs::path output_path_f0(output);
+	fs::path output_path_gains(output);
+	fs::path output_path_energies(output);
+
 	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
 	std::list<fs::path> input_files(it, end);
 	fs::create_directories(output_path);
+
+	if (!training)
+	{
+		output_path_feats.append("feats");
+		output_path_f0.append("f0");
+		output_path_gains.append("gains");
+		output_path_energies.append("energies");
+
+		fs::create_directories(output_path_feats);
+		fs::create_directories(output_path_f0);
+		fs::create_directories(output_path_gains);
+		fs::create_directories(output_path_energies);
+	}
 	
 	float gain(std::numeric_limits<float>::max());
 	if (norm)
@@ -502,7 +523,6 @@ int main(int argc, const char** argv) {
 					convert_to(file, out, "sw", silence, gain);
 				}
 
-				fprintf(stdout, "Merge: %s\n", out.string().c_str());
 				FILE* to = fopen(out.string().c_str(), "rb");
 				assert(to);
 				if (to) {
@@ -523,19 +543,21 @@ int main(int argc, const char** argv) {
 		lpcnet_encoder_init(st);
 		count = 0;
 
+		fprintf(stdout, "Process file: %ws\r", input_file.c_str());
+
 		f1 = fopen(input_file.string().c_str(), "rb");
 		if (f1 == NULL) {
-			fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
+			fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", input_file.string().c_str());
 			exit(1);
 		}
 		
-		fs::path ffeat_path = output_path;
+		fs::path ffeat_path = output_path_feats;
 		ffeat_path.append(input_file.filename().string());
 		ffeat_path.replace_extension(".f32");
 
 		ffeat = fopen(ffeat_path.string().c_str(), "wb");
 		if (ffeat == NULL) {
-			fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
+			fprintf(stderr, "Error opening output feature file: %s\n", ffeat_path.string().c_str());
 			exit(1);
 		}
 
@@ -562,10 +584,43 @@ int main(int argc, const char** argv) {
 			pcm_path.replace_extension(".u8");
 			fpcm = fopen(pcm_path.string().c_str(), "wb");
 			if (fpcm == NULL) {
-				fprintf(stderr, "Error opening output PCM file: %s\n", argv[4]);
+				fprintf(stderr, "Error opening output PCM file: %s\n", pcm_path.string().c_str());
 				exit(1);
 			}
 		}
+		else
+		{
+			fs::path f0_path = output_path_f0;
+			f0_path.append(input_file.filename().string());
+			f0_path.replace_extension(".f0");
+
+			ff0 = fopen(f0_path.string().c_str(), "wb");
+			if (ff0 == NULL) {
+				fprintf(stderr, "Error opening output f0 file: %s\n", f0_path.string().c_str());
+				exit(1);
+			}
+
+			fs::path fg_path = output_path_gains;
+			fg_path.append(input_file.filename().string());
+			fg_path.replace_extension(".g");
+
+			fg = fopen(fg_path.string().c_str(), "wb");
+			if (fg == NULL) {
+				fprintf(stderr, "Error opening output gain file: %s\n", fg_path.string().c_str());
+				exit(1);
+			}
+
+			fs::path energy_path = output_path_energies;
+			energy_path.append(input_file.filename().string());
+			energy_path.replace_extension(".e");
+
+			fe = fopen(energy_path.string().c_str(), "wb");
+			if (fe == NULL) {
+				fprintf(stderr, "Error opening output energy file: %s\n", energy_path.string().c_str());
+				exit(1);
+			}
+		}
+
 		while (1) {
 			float E = 0;
 			int silent;
@@ -624,11 +679,11 @@ int main(int argc, const char** argv) {
 				RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
 				compute_noise(&noisebuf[st->pcount * FRAME_SIZE], noise_std);
 			}
-			st->pcount++;
+			
 			/* Running on groups of 4 frames. */
-			if (st->pcount == 4) {
+			if (++st->pcount == 4) {
 				unsigned char buf[8];
-				process_superframe(st, buf, ffeat, encode, quantize, format);
+				process_superframe(st, buf, ffeat, ff0, fg, fe, encode, quantize, format);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
 				st->pcount = 0;
 			}
@@ -639,6 +694,9 @@ int main(int argc, const char** argv) {
 		}
 		fclose(f1);
 		fclose(ffeat);
+		if (ff0) fclose(ff0);
+		if (fg) fclose(fg);
+		if (fe) fclose(fe);
 		if (fpcm) fclose(fpcm);
 	}
     lpcnet_encoder_destroy(st);
