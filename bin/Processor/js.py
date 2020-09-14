@@ -58,7 +58,7 @@ class JSpeechProcessor(object):
     def _normalize(self, text):
         text = text.replace('〜', 'ー').replace('～', 'ー')
         text = text.replace("’", "'").replace('”', '"').replace('“', '``')
-        text = text.replace('―', '-').replace('‐', '-').replace('˗', '-').replace('֊', '-')
+        text = text.replace('˗', '-').replace('֊', '-')
         text = text.replace('‐', '-').replace('‑', '-').replace('‒', '-').replace('–', '-')
         text = text.replace('⁃', '-').replace('⁻', '-').replace('₋', '-').replace('−', '-')
         text = text.replace('﹣', 'ー').replace('－', 'ー').replace('—', 'ー').replace('―', 'ー')
@@ -103,4 +103,3 @@ class JSpeechProcessor(object):
         
 #processor = JSpeechProcessor()
 #processor.text_to_sequence('また東寺のように五大明王と呼ばれる主要な明王の中央に配されることも多い。')
-
