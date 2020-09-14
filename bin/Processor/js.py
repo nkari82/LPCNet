@@ -11,8 +11,8 @@ import numpy as np
 
 _pad = "pad"
 _eos = "eos"
-_punctuation = [".", ",", "、", "。", "！", "？", "!", "?"]
-_cleaner = [" ", "　", "「", "」", "『", "』", "・", "【", "】","（", "）", "(", ")"]
+_punctuation = [".",",","、","。","！","？","!","?"]
+_cleaner = [" ","　","「","」","『","』","・","【","】","（","）","(", ")"]
 _letters = [chr(_) for _ in range(0x30A0, 0x30FF)]  # katakana
 _numbers = "0123456789"
 _alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
