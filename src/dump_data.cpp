@@ -328,14 +328,14 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 	sox_close(in);
 }
 
-void show_help(const cxxopts::Options& options, const char* what = nullptr)
+void show_help(const cxxopts::Options& options, const char* message = nullptr)
 {
 	std::cout << options.help() << std::endl;
-	std::cout << "usage: ./dump_data --m train -i \"./*.wav or s16\" -o ./train" << std::endl;
-	std::cout << "usage: ./dump_data --m test -i \"./train/*.s16\" -o ./dump" << std::endl;
+	std::cout << "usage: ./dump_data -m train -i \"./*.wav or s16\" -o ./train" << std::endl;
+	std::cout << "usage: ./dump_data -m test -f <0 or 1> -i \"./train/*.s16\" -o ./dump" << std::endl;
 	
-	if(what != nullptr)
-		std::cout << what << std::endl;
+	if(message != nullptr)
+		std::cout << message << std::endl;
 }
 
 /*
