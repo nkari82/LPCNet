@@ -12,5 +12,5 @@
 	branch = master
 [submodule "thirdparty/world"]
 	path = thirdparty/world
-	url = https://github.com/r9y9/World-cmake.git
-	branch = cmake
+	url = https://github.com/mmorise/World.git
+	branch = master
