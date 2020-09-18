@@ -12,5 +12,5 @@
 	branch = master
 [submodule "thirdparty/world"]
 	path = thirdparty/world
-	url = https://github.com/mmorise/World.git
+	url = https://github.com/nkari82/World.git
 	branch = master
