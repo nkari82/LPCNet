@@ -332,7 +332,7 @@ void show_help(const cxxopts::Options& options, const char* message = nullptr)
 {
 	std::cout << options.help() << std::endl;
 	std::cout << "usage: ./dump_data -m train -i \"./*.wav or s16\" -o ./train" << std::endl;
-	std::cout << "usage: ./dump_data -m test -f <0 or 1> -i \"./train/*.s16\" -o ./dump" << std::endl;
+	std::cout << "usage: ./dump_data -m test -f <0 or 1> -i \"./train/*.wav or *.s16\" -o ./dump" << std::endl;
 	
 	if(message != nullptr)
 		std::cout << message << std::endl;
@@ -361,6 +361,7 @@ int main(int argc, const char** argv) {
     float x[FRAME_SIZE];
     int gain_change_count = 0;
     FILE* f1;
+	FILE* fm;
     FILE* ffeat;
     FILE* fpcm = NULL;
 	FILE* ff0 = NULL;
@@ -482,6 +483,7 @@ int main(int argc, const char** argv) {
 	fs::path output_path_feats(output);
 	fs::path output_path_f0(output);
 	fs::path output_path_energies(output);
+	fs::path output_path_pcm(output);
 
 	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
 	std::list<fs::path> input_files(it, end);
@@ -492,10 +494,14 @@ int main(int argc, const char** argv) {
 		output_path_feats.append("feats");
 		output_path_f0.append("f0");
 		output_path_energies.append("energies");
+		output_path_pcm.append("pcm");
 
 		fs::create_directories(output_path_feats);
 		fs::create_directories(output_path_f0);
 		fs::create_directories(output_path_energies);
+
+		if (!input_files.empty() && input_files.front().extension() == ".wav")
+			fs::create_directories(output_path_pcm);
 	}
 	
 	float gain(std::numeric_limits<float>::max());
@@ -518,8 +524,8 @@ int main(int argc, const char** argv) {
 		fs::path merge = output_path;
 		merge.append(parent_name + ".s16.merge");
 
-		f1 = fopen(merge.string().c_str(), "wb");
-		if (f1) {
+		fm = fopen(merge.string().c_str(), "wb");
+		if (fm) {
 			for (auto& file : input_files)
 			{
 				fs::path out = output_path;
@@ -535,11 +541,11 @@ int main(int argc, const char** argv) {
 				FILE* to = fopen(out.string().c_str(), "rb");
 				assert(to);
 				if (to) {
-					copy(to, f1);
+					copy(to, fm);
 					fclose(to);
 				}
 			}
-			fclose(f1);
+			fclose(fm);
 			input_path = merge;
 		}
 
@@ -553,6 +559,16 @@ int main(int argc, const char** argv) {
 		count = 0;
 
 		fprintf(stdout, "Process file: %ws\r", input_file.c_str());
+
+		auto in_ext = input_file.extension();
+		if (in_ext == ".wav")
+		{
+			fs::path pcm_path = output_path_pcm;
+			pcm_path.append(input_file.filename().string());
+			pcm_path.replace_extension(".s16");
+			convert_to(input_file, pcm_path, "sw", silence, gain);
+			input_file = pcm_path;
+		}
 
 		f1 = fopen(input_file.string().c_str(), "rb");
 		if (f1 == NULL) {
