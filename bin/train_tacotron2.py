@@ -355,12 +355,15 @@ class Tacotron2Trainer(Seq2SeqBasedTrainer):
 def main():
     """Run training process."""
     parser = argparse.ArgumentParser(description="Train Tacotron2")
-    parser.add_argument("--outdir", type=str, required=True, help="directory to save checkpoints.")
-    parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
+    #parser.add_argument("--outdir", type=str, required=True, help="directory to save checkpoints.")
+    #parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
     parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint file path to resume training. (default="")')
-    parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
-    parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
+    #parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
+    #parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     args = parser.parse_args()
+    
+    if args.resume is not None:
+        args.resume = tf.train.latest_checkpoint(args.resume)
     
     # set mixed precision config
     if args.mixed_precision == 1:
