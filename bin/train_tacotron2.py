@@ -19,7 +19,6 @@ import argparse
 import logging
 import os
 import numpy as np
-import yaml
 import tensorflow_tts as tts
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
@@ -137,8 +136,8 @@ def generate_datasets(items, config, max_mel_length, max_ids_length):
     
     def _generator():
         for item in items:
-            text_ids, feat_path, speaker_name = item
-            text_ids_length = text_ids.shape[0]
+            tid, text_seq, feat_path, speaker_name = item
+            text_seq_length = text_seq.shape[0]
             
             f = open(feat_path, 'rb')
             mel = np.fromfile(f, dtype='float32')
@@ -152,15 +151,15 @@ def generate_datasets(items, config, max_mel_length, max_ids_length):
             
             # create guided attention (default).
             g_attention = _guided_attention(
-                text_ids_length,
+                text_seq_length,
                 mel_length,
                 max_ids_length,
                 max_mel_length,
                 config.guided_attention
             )
             
-            yield { "input_ids": text_ids,
-                     "input_lengths": text_ids_length,
+            yield { "input_ids": text_seq,
+                     "input_lengths": text_seq_length,
                      "speaker_ids": speaker,
                      "mel_gts": mel,
                      "mel_lengths": mel_length,
@@ -355,11 +354,11 @@ class Tacotron2Trainer(Seq2SeqBasedTrainer):
 def main():
     """Run training process."""
     parser = argparse.ArgumentParser(description="Train Tacotron2")
-    #parser.add_argument("--outdir", type=str, required=True, help="directory to save checkpoints.")
-    #parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
+    parser.add_argument("--outdir", type=str, required=True, help="directory to save checkpoints.")
+    parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
     parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint file path to resume training. (default="")')
-    #parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
-    #parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
+    parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
+    parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     args = parser.parse_args()
     
     if args.resume is not None:
@@ -390,12 +389,12 @@ def main():
     config = Config(args.outdir, processor.vocab_size())
     
     max_mel_length = processor.max_feat_size() // 4 // config.n_mels
-    max_ids_length = processor.max_ids_length()
+    max_seq_length = processor.max_seq_length()
     
     # split train and test 
     train_split, valid_split = train_test_split(processor.items, test_size=config.test_size,random_state=42,shuffle=True)
-    train_dataset = generate_datasets(train_split, config, max_mel_length, max_ids_length)
-    valid_dataset = generate_datasets(valid_split, config, max_mel_length, max_ids_length)
+    train_dataset = generate_datasets(train_split, config, max_mel_length, max_seq_length)
+    valid_dataset = generate_datasets(valid_split, config, max_mel_length, max_seq_length)
      
     # define trainer
     trainer = Tacotron2Trainer(

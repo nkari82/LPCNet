@@ -35,12 +35,12 @@ class JSpeechProcessor(object):
                 self.items = [self._split_line(data_dir, line, "|") for line in f]
     
     def _split_line(self, data_dir, line, split):
-        feat_file, text = line.strip().split(split)
-        feat_path = os.path.join(data_dir, "feats", f"{feat_file}.f32")
-        text_ids = np.asarray(self.text_to_sequence(text), np.int32)
+        tid, text = line.strip().split(split)
+        feat_path = os.path.join(data_dir, "feats", f"{tid}.f32")
+        text_seq = np.asarray(self.text_to_sequence(text), np.int32)
         self._max_feat_size = max(self._max_feat_size, os.stat(feat_path).st_size)
-        self._max_ids_length = max(self._max_ids_length, text_ids.shape[0])
-        return text_ids, feat_path, self._speaker_name
+        self._max_seq_length = max(self._max_seq_length, text_seq.shape[0])
+        return tid, text_seq, feat_path, self._speaker_name
         
     def _pronunciation(self, text):
         result = self._tagger.parse(text)
@@ -66,8 +66,8 @@ class JSpeechProcessor(object):
         text = text.replace('，', '、').replace('．', '。').replace('!', '！').replace('?', '？')
         return unicodedata.normalize('NFKC', text)
 
-    def max_ids_length(self):
-        return self._max_ids_length
+    def max_seq_length(self):
+        return self._max_seq_length
         
     def max_feat_size(self):
         return self._max_feat_size
