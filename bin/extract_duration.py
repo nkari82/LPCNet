@@ -21,8 +21,10 @@ import os
 import numpy as np
 import tensorflow_tts as tts
 from tqdm import tqdm
+from numba import jit
 from tensorflow_tts.configs.tacotron2 import Tacotron2Config
 from tensorflow_tts.models import TFTacotron2
+from tensorflow_tts.utils import return_strategy
 from Processor import JSpeechProcessor
 
 sys.path.append(".")
@@ -207,7 +209,7 @@ def get_duration_from_alignment(alignment):
 def main():
     """Running extract tacotron-2 durations."""
     parser = argparse.ArgumentParser(description="Extract durations from charactor with trained Tacotron-2 ")
-    parser.add_argument("--outdir", type=str, required=True, help="directory to save checkpoints.")
+    parser.add_argument("--outdir", type=str, required=True, help="directory to save generated speech.")
     parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
     parser.add_argument("--checkpoint", type=str, required=True, help="checkpoint file to be loaded.")
     parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
@@ -267,7 +269,7 @@ def main():
         del data["real_mel_lengths"]
 
         # tacotron2 inference.
-        mel_outputs, post_mel_outputs, stop_outputs, alignment_historys = tacotron2(
+        _, _, _, alignment_historys = tacotron2(
             **data,
             use_window_mask=args.use_window_mask,
             win_front=args.win_front,
