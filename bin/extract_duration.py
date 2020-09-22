@@ -146,25 +146,28 @@ def generate_datasets(items, config, max_mel_length, max_seq_length):
                 config.guided_attention
             )
             
-            yield { "input_ids": text_seq,
+            yield { "utt_ids": tid,
+                     "input_ids": text_seq,
                      "input_lengths": text_seq_length,
                      "speaker_ids": speaker,
                      "mel_gts": mel,
                      "mel_lengths": mel_length,
                      "g_attentions": g_attention }
 
-    output_types={ "input_ids": tf.int32,
-                        "input_lengths": tf.int32,
-                        "speaker_ids": tf.int32,
-                        "mel_gts": tf.float32,
-                        "mel_lengths": tf.int32, 
-                        "g_attentions": tf.float32 }
+    output_types={ "utt_ids": tf.string, 
+                         "input_ids": tf.int32,
+                         "input_lengths": tf.int32,
+                         "speaker_ids": tf.int32,
+                         "mel_gts": tf.float32,
+                         "mel_lengths": tf.int32, 
+                         "g_attentions": tf.float32 }
                                                   
     datasets = tf.data.Dataset.from_generator(_generator, output_types=output_types)
     datasets = datasets.cache()
     datasets = datasets.shuffle(len(items),reshuffle_each_iteration=True)
             
     padding_values = {
+        "utt_ids": " ",
         "input_ids": 0,
         "input_lengths": 0,
         "speaker_ids": 0,
@@ -174,6 +177,7 @@ def generate_datasets(items, config, max_mel_length, max_seq_length):
     }
     
     padded_shapes = {
+        "utt_ids": [],
         "input_ids": [None],
         "input_lengths": [],
         "speaker_ids": [],
