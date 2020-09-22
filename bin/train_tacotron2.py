@@ -361,7 +361,7 @@ def main():
     parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     args = parser.parse_args()
     
-    if args.resume is not None:
+    if args.resume is not None and os.path.isdir(args.resume):
         args.resume = tf.train.latest_checkpoint(args.resume)
     
     # set mixed precision config

@@ -220,6 +220,9 @@ def main():
     parser.add_argument("--save-alignment", default=0, type=int, help="save-alignment.")
     args = parser.parse_args()
     
+    if args.checkpoint is not None and os.path.isdir(args.checkpoint):
+        args.checkpoint = tf.train.latest_checkpoint(args.checkpoint)
+        
     # set logger
     log_format = "%(asctime)s (%(module)s:%(lineno)d) %(levelname)s: %(message)s"
     if args.verbose > 1:
@@ -255,7 +258,7 @@ def main():
     mel_lengths = np.array([50])
     tacotron2(input_ids,input_lengths,speaker_ids,mel_outputs,mel_lengths,10,training=True)
     tacotron2.summary()
-    tacotron2.load_weights(tf.train.latest_checkpoint(args.checkpoint))
+    tacotron2.load_weights(args.checkpoint)
 
     # apply tf.function for tacotron2.
     tacotron2 = tf.function(tacotron2, experimental_relax_shapes=True)
