@@ -92,12 +92,12 @@ class Config(object):
         
         self.outdir = outdir
         self.items = { "outdir": outdir, 
-                       "batch_size": self.batch_size,
-                       "train_max_steps": self.train_max_steps,
-                       "log_interval_steps": self.log_interval_steps,
-                       "eval_interval_steps": self.eval_interval_steps,
-                       "save_interval_steps": self.save_interval_steps,
-                       "num_save_intermediate_results": self.num_save_intermediate_results }
+                          "batch_size": self.batch_size,
+                          "train_max_steps": self.train_max_steps,
+                          "log_interval_steps": self.log_interval_steps,
+                          "eval_interval_steps": self.eval_interval_steps,
+                          "save_interval_steps": self.save_interval_steps,
+                          "num_save_intermediate_results": self.num_save_intermediate_results }
         
     def __getitem__(self, key):
         return self.items[key]
