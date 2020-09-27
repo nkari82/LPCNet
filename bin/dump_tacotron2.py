@@ -96,7 +96,7 @@ def main():
     speaker_ids = np.array([0])
     mel_outputs = np.random.normal(size=(1, 50, config.n_mels)).astype(np.float32)
     mel_lengths = np.array([50])
-    tacotron2(input_ids,input_lengths,speaker_ids,mel_outputs,mel_lengths,10,training=True)
+    tacotron2(input_ids,input_lengths,speaker_ids,mel_outputs,mel_lengths,10,training=False)
     tacotron2.load_weights("../examples/tacotron2/checkpoints/model-120000.h5")
     tacotron2.summary()
     
