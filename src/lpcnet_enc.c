@@ -496,7 +496,7 @@ static void frame_analysis(LPCNetEncState *st, kiss_fft_cpx *X, float *Ex, const
 void compute_frame_features(LPCNetEncState *st, const float *in) {
   float aligned_in[FRAME_SIZE];
   int i;
-  float E = 0;
+  float E = 0.0f;
   float Ly[NB_BANDS];
   float follow, logMax;
   float g;
@@ -519,7 +519,7 @@ void compute_frame_features(LPCNetEncState *st, const float *in) {
   }
   dct(st->features[st->pcount], Ly);
   st->features[st->pcount][0] -= 4;
-  st->energy[st->pcount] = sqrt(E);
+  st->energy[st->pcount] = sqrt(E / (float)NB_BANDS);
   g = lpc_from_cepstrum(st->lpc, st->features[st->pcount]);
   st->features[st->pcount][2*NB_BANDS+2] = log10(g);
   for (i=0;i<LPC_ORDER;i++) st->features[st->pcount][2*NB_BANDS+3+i] = st->lpc[i];
