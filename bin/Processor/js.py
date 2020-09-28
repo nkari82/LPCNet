@@ -20,7 +20,7 @@ _alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 symbols = [_pad] + _punctuation + _letters + list(_alphabet) + list(_numbers) + [_eos]
 
 class JSpeechProcessor(object):
-    def __init__(self, data_dir, cleaner_names="", metadata_filename="metadata.csv"):
+    def __init__(self, data_dir, cleaner_names="", metadata_filename="metadata.csv"):  
         self._tagger = MeCab.Tagger('')
         self._symbol_to_id = {c: i for i, c in enumerate(symbols)}
         self._id_to_symbol = {i: c for i, c in enumerate(symbols)}
@@ -82,6 +82,7 @@ class JSpeechProcessor(object):
         text = self._pronunciation(text)
         sequence = self._symbols_to_sequence(text)
         sequence += self._symbols_to_sequence([_eos])
+        #print(sequence)
         return sequence
 
     def sequence_to_text(seq):
@@ -99,7 +100,9 @@ class JSpeechProcessor(object):
         text = self._clean_text(text)
         text = self._normalize(text)
         text = self._pronunciation(text)
-        print(text)
+        #print(text)
         
-#processor = JSpeechProcessor()
+#processor = JSpeechProcessor(data_dir=None)
+#print(processor.vocab_size())  167
 #processor.text_to_sequence('また東寺のように五大明王と呼ばれる主要な明王の中央に配されることも多い。')
+#[71, 40, 49, 101, 33, 55, 81, 101, 52, 29, 41, 13, 72, 80, 101, 19, 101, 49, 81, 57, 85, 84, 32, 78, 81, 101, 51, 72, 80, 101, 19, 101, 55, 42, 78, 101, 19, 101, 52, 56, 13, 30, 85, 84, 28, 49, 75, 19, 101, 13, 4, 166]
