@@ -1,11 +1,16 @@
 import numpy as np
 import tensorflow as tf
+import sys
+import argparse
+import logging
+import os
 from tensorflow_tts.models import TFTacotron2
 from Processor import JSpeechProcessor
 
+sys.path.append(".")
 
 class Config(object):
-    def __init__(self,outdir,vocab_size=149,n_speakers=1):
+    def __init__(self,outdir,vocab_size=65535,n_speakers=1):
         # tacotron2 params
         self.vocab_size = vocab_size                    # default
         self.embedding_hidden_size = 512            # 'embedding_hidden_size': 512
@@ -61,8 +66,7 @@ class Config(object):
         self.num_save_intermediate_results = 1
         
         self.outdir = outdir
-        self.items = 
-        {  
+        self.items = {  
             "outdir": outdir, 
             "batch_size": self.batch_size,
             "train_max_steps": self.train_max_steps,
@@ -77,11 +81,19 @@ class Config(object):
         
 def main():
     parser = argparse.ArgumentParser(description="Dump Tacotron2")
+    parser.add_argument("--outdir", default="./", type=str, help="directory to save pb or tflite file.")
+    parser.add_argument("--checkpoint", type=str, required=True, help="checkpoint file to be loaded.")
+    parser.add_argument("--vocab_size",type=int, required=True, help="vocab size")
     args = parser.parse_args()
     
-    # select processor
-    processor = JSpeechProcessor(args.rootdir)     # for test
-    config = Config(args.outdir, processor.vocab_size())
+    # check directory existence(checkpoint)
+    if not os.path.exists(args.outdir):
+        os.makedirs(args.outdir)
+        
+    if args.checkpoint is not None and os.path.isdir(args.checkpoint):
+        args.checkpoint = tf.train.latest_checkpoint(args.checkpoint)
+        
+    config = Config(args.outdir, args.vocab_size)
     
     # define model.
     tacotron2 = TFTacotron2(config=config, training=False, name="tacotron2v2", enable_tflite_convertible=True)
@@ -97,7 +109,7 @@ def main():
     mel_outputs = np.random.normal(size=(1, 50, config.n_mels)).astype(np.float32)
     mel_lengths = np.array([50])
     tacotron2(input_ids,input_lengths,speaker_ids,mel_outputs,mel_lengths,10,training=False)
-    tacotron2.load_weights("../examples/tacotron2/checkpoints/model-120000.h5")
+    tacotron2.load_weights(args.checkpoint)
     tacotron2.summary()
     
     tacotron2_concrete_function = tacotron2.inference_tflite.get_concrete_function()
@@ -107,7 +119,7 @@ def main():
     tflite_model = converter.convert()
     
     # Save the TF Lite model.
-    with open('tacotron2.tflite', 'wb') as f:
+    with open(os.path.join(args.outdir, 'tacotron2.tflite'), 'wb') as f:
         f.write(tflite_model)
 
     print('Model size is %f MBs.' % (len(tflite_model) / 1024 / 1024.0) )

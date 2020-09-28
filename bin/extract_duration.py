@@ -93,13 +93,15 @@ class Config(object):
         self.num_save_intermediate_results = 1
         
         self.outdir = outdir
-        self.items = { "outdir": outdir, 
-                          "batch_size": self.batch_size,
-                          "train_max_steps": self.train_max_steps,
-                          "log_interval_steps": self.log_interval_steps,
-                          "eval_interval_steps": self.eval_interval_steps,
-                          "save_interval_steps": self.save_interval_steps,
-                          "num_save_intermediate_results": self.num_save_intermediate_results }
+        self.items = { 
+            "outdir": outdir, 
+            "batch_size": self.batch_size,
+            "train_max_steps": self.train_max_steps,
+            "log_interval_steps": self.log_interval_steps,
+            "eval_interval_steps": self.eval_interval_steps,
+            "save_interval_steps": self.save_interval_steps,
+            "num_save_intermediate_results": self.num_save_intermediate_results 
+        }
         
     def __getitem__(self, key):
         return self.items[key]
@@ -148,21 +150,27 @@ def generate_datasets(items, config, max_mel_length, max_seq_length):
                 config.guided_attention
             )
             
-            yield { "utt_ids": tid,
-                     "input_ids": text_seq,
-                     "input_lengths": text_seq_length,
-                     "speaker_ids": speaker,
-                     "mel_gts": mel,
-                     "mel_lengths": mel_length,
-                     "g_attentions": g_attention }
+            data = { 
+                "utt_ids": tid,
+                "input_ids": text_seq,
+                "input_lengths": text_seq_length,
+                "speaker_ids": speaker,
+                "mel_gts": mel,
+                "mel_lengths": mel_length,
+                "g_attentions": g_attention 
+            }
+                     
+            yield data
 
-    output_types={ "utt_ids": tf.string, 
-                         "input_ids": tf.int32,
-                         "input_lengths": tf.int32,
-                         "speaker_ids": tf.int32,
-                         "mel_gts": tf.float32,
-                         "mel_lengths": tf.int32, 
-                         "g_attentions": tf.float32 }
+    output_types = { 
+        "utt_ids": tf.string, 
+        "input_ids": tf.int32,
+        "input_lengths": tf.int32,
+        "speaker_ids": tf.int32,
+        "mel_gts": tf.float32,
+        "mel_lengths": tf.int32, 
+        "g_attentions": tf.float32 
+    }
                                                   
     datasets = tf.data.Dataset.from_generator(_generator, output_types=output_types)
     datasets = datasets.cache()
