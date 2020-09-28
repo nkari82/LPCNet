@@ -83,7 +83,8 @@ def main():
     parser = argparse.ArgumentParser(description="Dump Tacotron2")
     parser.add_argument("--outdir", default="./", type=str, help="directory to save pb or tflite file.")
     parser.add_argument("--checkpoint", type=str, required=True, help="checkpoint file to be loaded.")
-    parser.add_argument("--vocab_size",type=int, required=True, help="vocab size")
+    parser.add_argument("--vocab_size", type=int, required=True, help="vocab size")
+    parser.add_argument("--tflite", type=bool, default=True,  help="saved model to tflite")
     args = parser.parse_args()
     
     # check directory existence(checkpoint)
@@ -96,33 +97,41 @@ def main():
     config = Config(args.outdir, args.vocab_size)
     
     # define model.
-    tacotron2 = TFTacotron2(config=config, training=False, name="tacotron2v2", enable_tflite_convertible=True)
+    tacotron2 = TFTacotron2(config=config, training=False, name="tacotron2", enable_tflite_convertible=args.tflite)
     
     # Newly added :
     tacotron2.setup_window(win_front=6, win_back=6)
     tacotron2.setup_maximum_iterations(3000)
     
-    #build
+    #build       
     input_ids = np.array([[1, 2, 3, 4, 5, 6, 7, 8, 9]])
     input_lengths = np.array([9])
     speaker_ids = np.array([0])
     mel_outputs = np.random.normal(size=(1, 50, config.n_mels)).astype(np.float32)
     mel_lengths = np.array([50])
     tacotron2(input_ids,input_lengths,speaker_ids,mel_outputs,mel_lengths,10,training=False)
-    tacotron2.load_weights(args.checkpoint)
     tacotron2.summary()
+    tacotron2.load_weights(args.checkpoint)
+        
+    if args.tflite:
+        tacotron2_concrete_function = tacotron2.inference_tflite.get_concrete_function()
+        converter = tf.lite.TFLiteConverter.from_concrete_functions([tacotron2_concrete_function])
+        converter.optimizations = [tf.lite.Optimize.DEFAULT]
+        converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
+        tflite_model = converter.convert()
     
-    tacotron2_concrete_function = tacotron2.inference_tflite.get_concrete_function()
-    converter = tf.lite.TFLiteConverter.from_concrete_functions([tacotron2_concrete_function])
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
-    converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
-    tflite_model = converter.convert()
+        # Save the TF Lite model.
+        with open(os.path.join(args.outdir, 'tacotron2.tflite'), 'wb') as f:
+            f.write(tflite_model)
+
+        print('Model size is %f MBs.' % (len(tflite_model) / 1024 / 1024.0) )
+    else:
+        inference_inputs = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+        _, _, _, _ = tacotron2.inference(
+        input_ids = tf.expand_dims(tf.convert_to_tensor(inference_inputs, dtype=tf.int32), 0),
+        input_lengths = tf.convert_to_tensor([len(inference_inputs)], tf.int32),
+        speaker_ids = tf.convert_to_tensor([0], dtype=tf.int32))
+        tf.saved_model.save(tacotron2, os.path.join(args.outdir, 'test_saved'), signatures=tacotron2.inference)
     
-    # Save the TF Lite model.
-    with open(os.path.join(args.outdir, 'tacotron2.tflite'), 'wb') as f:
-        f.write(tflite_model)
-
-    print('Model size is %f MBs.' % (len(tflite_model) / 1024 / 1024.0) )
-
 if __name__ == "__main__":
     main()

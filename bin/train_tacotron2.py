@@ -454,16 +454,10 @@ def main():
 
     # start training
     try:
-        trainer.fit(
-            train_dataset,
-            valid_dataset,
-            saved_path=os.path.join(args.outdir, "checkpoints/"),
-            resume=args.resume
-        )
+        trainer.fit(train_dataset,valid_dataset,saved_path=os.path.join(args.outdir, "checkpoints/"),resume=args.resume)
     except KeyboardInterrupt:
         trainer.save_checkpoint()
         logging.info(f"Successfully saved checkpoint @ {trainer.steps}steps.")
-
 
 if __name__ == "__main__":
     main()
