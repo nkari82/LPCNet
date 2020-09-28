@@ -117,9 +117,7 @@ checkpoint_dir = os.path.dirname(checkpoint_path)
 
 
 # dump models to disk as we go
-checkpoint = ModelCheckpoint(filepath=checkpoint_path, 
-                save_weights_only=True,
-                verbose=1)
+checkpoint = ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, verbose=1)
 
 #Training from scratch
 initial_epoch = 0
