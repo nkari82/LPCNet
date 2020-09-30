@@ -105,15 +105,19 @@ def main():
     tacotron2.setup_maximum_iterations(3000)
 
     #build       
-    if args.tflite:
+    if args.tflite is True:
+        print("dump tflite => vocab_size: {}".format(args.vocab_size))
+        #tacotron2.inference_tflite(input_ids = tf.expand_dims(tf.convert_to_tensor([0], dtype=tf.int32), 0)
+        #, input_lengths = tf.convert_to_tensor([1], tf.int32)
+        #, speaker_ids = tf.convert_to_tensor([0], dtype=tf.int32))
         input_ids = np.array([[1, 2, 3, 4, 5, 6, 7, 8, 9]])
         input_lengths = np.array([9])
         speaker_ids = np.array([0])
         mel_outputs = np.random.normal(size=(1, 50, config.n_mels)).astype(np.float32)
         mel_lengths = np.array([50])
         tacotron2(input_ids,input_lengths,speaker_ids,mel_outputs,mel_lengths,10,training=False)
-        tacotron2.summary()
         tacotron2.load_weights(args.checkpoint)
+        tacotron2.summary()
         tacotron2_concrete_function = tacotron2.inference_tflite.get_concrete_function()
         converter = tf.lite.TFLiteConverter.from_concrete_functions([tacotron2_concrete_function])
         converter.optimizations = [tf.lite.Optimize.DEFAULT]
@@ -123,11 +127,11 @@ def main():
         with open(os.path.join(args.outdir, "{}.tflite".format(save_name)), 'wb') as f:
             f.write(tflite_model)
     else:
+        print("dump => vocab_size: {}".format(args.vocab_size))
         # tensorflow-gpu==2.3.0 bug to load_weight after call inference
-        _, _, _, _ = tacotron2.inference(
-        input_ids = tf.expand_dims(tf.convert_to_tensor([0], dtype=tf.int32), 0),
-        input_lengths = tf.convert_to_tensor([1], tf.int32),
-        speaker_ids = tf.convert_to_tensor([0], dtype=tf.int32))
+        tacotron2.inference(input_ids = tf.expand_dims(tf.convert_to_tensor([0], dtype=tf.int32), 0)
+        , input_lengths = tf.convert_to_tensor([1], tf.int32)
+        , speaker_ids = tf.convert_to_tensor([0], dtype=tf.int32))
         tacotron2.load_weights(args.checkpoint)   
         tf.saved_model.save(tacotron2, os.path.join(args.outdir, save_name), signatures = tacotron2.inference)
     
