@@ -37,7 +37,7 @@ for i in range(len(physical_devices)):
 STRATEGY = return_strategy()
 
 class Config(object):
-    def __init__(self,outdir,vocab_size=149,n_speakers=1):
+    def __init__(self,outdir,vocab_size=149,n_speakers=1,batch_size=8):
         # tacotron2 params
         self.vocab_size = vocab_size                    # default
         self.embedding_hidden_size = 512            # 'embedding_hidden_size': 512
@@ -69,7 +69,7 @@ class Config(object):
         self.postnet_dropout_rate = 0.1                # 'postnet_dropout_rate': 0.1
         
         # data
-        self.batch_size = 8
+        self.batch_size = batch_size
         self.test_size = 0.05
         self.mel_length_threshold = 0
         self.guided_attention = 0.2
@@ -131,16 +131,15 @@ def generate_datasets(items, config, max_mel_length, max_seq_length):
             tid, text_seq, feat_path, speaker_name = item
             text_seq_length = text_seq.shape[0]
             
-            f = open(feat_path, 'rb')
-            mel = np.fromfile(f, dtype='float32')
-            mel = np.resize(mel, (-1, config.n_mels))
-            mel_length = mel.shape[0]
-            f.close()
-            speaker = 0
-            
-            if mel_length < config.mel_length_threshold:
+            with open(feat_path, 'rb') as f:
+                mel = np.fromfile(f, dtype='float32')
+                mel = np.resize(mel, (-1, config.n_mels))
+                mel_length = mel.shape[0]
+                speaker = 0
+
+            if f is None or mel_length < config.mel_length_threshold:
                 continue
-            
+                        
             # create guided attention (default).
             g_attention = _guided_attention(
                 text_seq_length,
@@ -173,8 +172,6 @@ def generate_datasets(items, config, max_mel_length, max_seq_length):
     }
                                                   
     datasets = tf.data.Dataset.from_generator(_generator, output_types=output_types)
-    datasets = datasets.cache()
-    datasets = datasets.shuffle(len(items),reshuffle_each_iteration=True)
             
     padding_values = {
         "utt_ids": " ",
@@ -214,6 +211,7 @@ def get_duration_from_alignment(alignment):
         
     return D
     
+# python .\extract_duration.py --rootdir ./datasets/jsut/basic --outdir ./dump/durations --checkpoint model-171500.h5
 def main():
     """Running extract tacotron-2 durations."""
     parser = argparse.ArgumentParser(description="Extract durations from charactor with trained Tacotron-2 ")
@@ -247,7 +245,7 @@ def main():
     
     # select processor
     processor = JSpeechProcessor(args.rootdir)     # for test
-    config = Config(args.outdir, processor.vocab_size())
+    config = Config(args.outdir, processor.vocab_size(),1, args.batch_size)
     
     max_mel_length = processor.max_feat_size() // 4 // config.n_mels
     max_seq_length = processor.max_seq_length()
@@ -265,8 +263,8 @@ def main():
     mel_outputs = np.random.normal(size=(1, 50, config.n_mels)).astype(np.float32)
     mel_lengths = np.array([50])
     tacotron2(input_ids,input_lengths,speaker_ids,mel_outputs,mel_lengths,10,training=True)
-    tacotron2.summary()
     tacotron2.load_weights(args.checkpoint)
+    tacotron2.summary()
 
     # apply tf.function for tacotron2.
     tacotron2 = tf.function(tacotron2, experimental_relax_shapes=True)
@@ -276,8 +274,7 @@ def main():
         input_lengths = data["input_lengths"]
         mel_lengths = data["mel_lengths"]
         utt_ids = utt_ids.numpy()
-        real_mel_lengths = data["real_mel_lengths"]
-        del data["real_mel_lengths"]
+        real_mel_lengths = mel_lengths
 
         # tacotron2 inference.
         _, _, _, alignment_historys = tacotron2(
@@ -301,7 +298,6 @@ def main():
             assert (np.sum(d) >= real_mel_length), f"{d}, {np.sum(d)}, {alignment_mel_length}, {real_mel_length}"
             if np.sum(d) > real_mel_length:
                 rest = np.sum(d) - real_mel_length
-                # print(d, np.sum(d), real_mel_length)
                 if d[-1] > rest:
                     d[-1] -= rest
                 elif d[0] > rest:
@@ -319,7 +315,7 @@ def main():
             assert (np.sum(d) == real_mel_length), f"different between sum_durations and len_mel, {np.sum(d)} and {real_mel_length}"
 
             # save D to folder.
-            np.save(os.path.join(args.outdir, f"{saved_name}-durations.npy"),d.astype(np.int32),allow_pickle=False)
+            np.save(os.path.join(args.outdir, f"{saved_name}.dur"),d.astype(np.int32),allow_pickle=False)
 
             # save alignment to debug.
             if args.save_alignment == 1:

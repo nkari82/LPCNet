@@ -26,7 +26,7 @@ class JSpeechProcessor(object):
         self._id_to_symbol = {i: c for i, c in enumerate(symbols)}
         self._data_dir = data_dir
         self._cleaner_names = cleaner_names
-        self._max_ids_length = 0
+        self._max_seq_length = 0
         self._max_feat_size = 0
         self._speaker_name = "tsuchiya"
         

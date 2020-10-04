@@ -141,14 +141,13 @@ def generate_datasets(items, config, max_mel_length, max_ids_length):
             tid, text_seq, feat_path, speaker_name = item
             text_seq_length = text_seq.shape[0]
             
-            f = open(feat_path, 'rb')
-            mel = np.fromfile(f, dtype='float32')
-            mel = np.resize(mel, (-1, config.n_mels))
-            mel_length = mel.shape[0]
-            f.close()
-            speaker = 0
-            
-            if mel_length < config.mel_length_threshold:
+            with open(feat_path, 'rb') as f:
+                mel = np.fromfile(f, dtype='float32')
+                mel = np.resize(mel, (-1, config.n_mels))
+                mel_length = mel.shape[0]
+                speaker = 0
+
+            if f is None or mel_length < config.mel_length_threshold:
                 continue
             
             # create guided attention (default).
