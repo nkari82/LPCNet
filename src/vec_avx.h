@@ -80,6 +80,19 @@ static __m128 exp4_approx_avx2(__m128 X)
 
 static __m128 (*exp4_approx)(__m128) = exp4_approx_avx;
 
+static __m256 exp8_approx_avx(__m256 X)
+{
+	__m256 Y;
+	__m128 Xhi, Xlo, Yhi, Ylo;
+	Xhi = _mm256_extractf128_ps(X, 1);
+	Xlo = _mm256_extractf128_ps(X, 0);
+	Yhi = exp4_approx(Xhi);
+	Ylo = exp4_approx(Xlo);
+	Y = _mm256_insertf128_ps(_mm256_setzero_ps(), Yhi, 1);
+	Y = _mm256_insertf128_ps(Y, Ylo, 0);
+	return Y;
+}
+
 static __m256 exp8_approx_avx2(__m256 X)
 {
    const __m256 K0 = _mm256_set1_ps(0.99992522f);
@@ -100,19 +113,6 @@ static __m256 exp8_approx_avx2(__m256 X)
    Y = _mm256_fmadd_ps(_mm256_fmadd_ps(_mm256_fmadd_ps(K3, X, K2), X, K1), X, K0);
    I = _mm256_slli_epi32(I, 23);
    Y = _mm256_castsi256_ps(_mm256_and_si256(mask, _mm256_add_epi32(I, _mm256_castps_si256(Y))));
-   return Y;
-}
-
-static __m256 exp8_approx_avx(__m256 X)
-{
-   __m256 Y;
-   __m128 Xhi, Xlo, Yhi, Ylo;
-   Xhi = _mm256_extractf128_ps(X, 1);
-   Xlo = _mm256_extractf128_ps(X, 0);
-   Yhi = exp4_approx(Xhi);
-   Ylo = exp4_approx(Xlo);
-   Y = _mm256_insertf128_ps(_mm256_setzero_ps(), Yhi, 1);
-   Y = _mm256_insertf128_ps(Y, Ylo, 0);
    return Y;
 }
 
