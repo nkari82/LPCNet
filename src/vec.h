@@ -162,3 +162,6 @@ static void sparse_sgemv_accum16(float *out, const float *w, int rows, const int
       }
    }
 }
+
+static void vec_init()
+{}
