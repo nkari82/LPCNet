@@ -732,8 +732,8 @@ int main(int argc, const char** argv) {
 			}
 
 			DioOption option;
-			option.f0_floor = 80.0;
-			option.f0_ceil = 7600.0;
+			option.f0_floor = 0.0;
+			option.f0_ceil = 8000.0;
 			option.channels_in_octave = 2.0;
 			option.frame_period = 10.0;
 			option.speed = 1;
