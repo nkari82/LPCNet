@@ -393,7 +393,7 @@ int main(int argc, const char** argv) {
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("f,format", "If '1', the output format is 'bark bands[18] + pitch + gain'", cxxopts::value<int>()->default_value("0"))
+		("f,format", "If '1', the output format is 'bark bands[18] + pitch period and correction'", cxxopts::value<int>()->default_value("0"))
 		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("1"))
 		("n,norm", "Normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
 		;
@@ -732,8 +732,8 @@ int main(int argc, const char** argv) {
 			}
 
 			DioOption option;
-			option.f0_floor = 0.0;
-			option.f0_ceil = 8000.0;
+			option.f0_floor = 80.0;
+			option.f0_ceil = 7600.0;
 			option.channels_in_octave = 2.0;
 			option.frame_period = 10.0;
 			option.speed = 1;

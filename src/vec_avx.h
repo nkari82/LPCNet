@@ -78,16 +78,14 @@ static __m128 exp4_approx_avx2(__m128 X)
 	return Y;
 }
 
-static __m128 (*exp4_approx)(__m128) = exp4_approx_avx;
-
 static __m256 exp8_approx_avx(__m256 X)
 {
 	__m256 Y;
 	__m128 Xhi, Xlo, Yhi, Ylo;
 	Xhi = _mm256_extractf128_ps(X, 1);
 	Xlo = _mm256_extractf128_ps(X, 0);
-	Yhi = exp4_approx(Xhi);
-	Ylo = exp4_approx(Xlo);
+	Yhi = exp4_approx_avx(Xhi);
+	Ylo = exp4_approx_avx(Xlo);
 	Y = _mm256_insertf128_ps(_mm256_setzero_ps(), Yhi, 1);
 	Y = _mm256_insertf128_ps(Y, Ylo, 0);
 	return Y;
@@ -116,6 +114,7 @@ static __m256 exp8_approx_avx2(__m256 X)
    return Y;
 }
 
+static __m128 (*exp4_approx)(__m128) = exp4_approx_avx;
 static __m256 (*exp8_approx)(__m256 X) = exp8_approx_avx;
 
 static float celt_exp(float x)
@@ -321,7 +320,13 @@ static void sparse_sgemv_accum16_avx2(float* out, const float* weights, int rows
 static void (*sgemv_accum16)(float*, const float*, int, int, int, const float*) = sgemv_accum16_avx;
 static void (*sparse_sgemv_accum16)(float*, const float*, int, const int*, const float*) = sparse_sgemv_accum16_avx;
 
-static void vec_init()
+
+#if defined(_MSC_VER)
+#pragma section(".CRT$XIU",long,read)
+void vec_avx_init()
+#else
+__attribute__((constructor)) void vec_avx_init()
+#endif
 {
 	int registers[4];
 	__cpuid(registers, 0);
@@ -330,11 +335,15 @@ static void vec_init()
 	if (registers[0] >= 7U)
 		__cpuidex(registers, 7, 0);
 
-    if ((registers[1] & (1 << 5)) != 0)
-    {
+	if ((registers[1] & (1 << 5)) != 0)
+	{
 		exp4_approx = exp4_approx_avx2;
 		exp8_approx = exp8_approx_avx2;
-        sgemv_accum16 = sgemv_accum16_avx2;
-        sparse_sgemv_accum16 = sparse_sgemv_accum16_avx2;
-    }
+		sgemv_accum16 = sgemv_accum16_avx2;
+		sparse_sgemv_accum16 = sparse_sgemv_accum16_avx2;
+	}
 }
+#if defined(_MSC_VER)
+__declspec(allocate(".CRT$XIU"))
+void (*vec_avx_initializer)() = vec_avx_init;
+#endif
