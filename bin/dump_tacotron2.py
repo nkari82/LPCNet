@@ -5,7 +5,6 @@ import argparse
 import logging
 import os
 from tensorflow_tts.models import TFTacotron2
-from Processor import JSpeechProcessor
 
 sys.path.append(".")
 
@@ -107,9 +106,6 @@ def main():
     #build       
     if args.tflite is True:
         print("dump tflite => vocab_size: {}".format(args.vocab_size))
-        #tacotron2.inference_tflite(input_ids = tf.expand_dims(tf.convert_to_tensor([0], dtype=tf.int32), 0)
-        #, input_lengths = tf.convert_to_tensor([1], tf.int32)
-        #, speaker_ids = tf.convert_to_tensor([0], dtype=tf.int32))
         input_ids = np.array([[1, 2, 3, 4, 5, 6, 7, 8, 9]])
         input_lengths = np.array([9])
         speaker_ids = np.array([0])
