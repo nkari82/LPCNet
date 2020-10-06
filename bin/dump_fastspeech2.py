@@ -4,40 +4,113 @@ import sys
 import argparse
 import logging
 import os
+import collections
 from tensorflow_tts.models import TFFastSpeech2
 
 sys.path.append(".")
 
+SelfAttentionParams = collections.namedtuple(
+    "SelfAttentionParams",
+    [
+        "n_speakers",
+        "hidden_size",
+        "num_hidden_layers",
+        "num_attention_heads",
+        "attention_head_size",
+        "intermediate_size",
+        "intermediate_kernel_size",
+        "hidden_act",
+        "output_attentions",
+        "output_hidden_states",
+        "initializer_range",
+        "hidden_dropout_prob",
+        "attention_probs_dropout_prob",
+        "layer_norm_eps",
+        "max_position_embeddings",
+    ],
+)
+
 class Config(object):
-    def __init__(self,outdir,n_speakers=1):
+    def __init__(self,outdir,vocab_size=150,n_speakers=1):
         # fastspeech2 params
+        self.vocab_size = vocab_size
         self.n_speakers = n_speakers
-        self.encoder_hidden_size: 256
-        self.encoder_num_hidden_layers: 3
-        self.encoder_num_attention_heads: 2
-        self.encoder_attention_head_size: 16  # in v1, = 384//2
-        self.encoder_intermediate_size: 1024
-        self.encoder_intermediate_kernel_size: 3
-        self.encoder_hidden_act: "mish"
-        self.decoder_hidden_size: 256
-        self.decoder_num_hidden_layers: 3
-        self.decoder_num_attention_heads: 2
-        self.decoder_attention_head_size: 16  # in v1, = 384//2
-        self.decoder_intermediate_size: 1024
-        self.decoder_intermediate_kernel_size: 3
-        self.decoder_hidden_act: "mish"
-        self.variant_prediction_num_conv_layers: 2
-        self.variant_predictor_filter: 256
-        self.variant_predictor_kernel_size: 3
-        self.variant_predictor_dropout_rate: 0.5
-        self.num_mels: 20
-        self.hidden_dropout_prob: 0.2
-        self.attention_probs_dropout_prob: 0.1
-        self.max_position_embeddings: 2048
-        self.initializer_range: 0.02
-        self.output_attentions: False
-        self.output_hidden_states: False
+        self.encoder_hidden_size = 256
+        self.encoder_num_hidden_layers = 3
+        self.encoder_num_attention_heads = 2
+        self.encoder_attention_head_size = 16  # in v1, = 384//2
+        self.encoder_intermediate_size = 1024
+        self.encoder_intermediate_kernel_size = 3
+        self.encoder_hidden_act = "mish"
+        self.decoder_hidden_size = 256
+        self.decoder_num_hidden_layers = 3
+        self.decoder_num_attention_heads = 2
+        self.decoder_attention_head_size = 16  # in v1, = 384//2
+        self.decoder_intermediate_size = 1024
+        self.decoder_intermediate_kernel_size = 3
+        self.decoder_hidden_act = "mish"
+        self.variant_prediction_num_conv_layers = 2
+        self.variant_predictor_filter = 256
+        self.variant_predictor_kernel_size = 3
+        self.variant_predictor_dropout_rate = 0.5
+        self.num_mels = 20
+        self.hidden_dropout_prob = 0.2
+        self.attention_probs_dropout_prob = 0.1
+        self.max_position_embeddings = 2048
+        self.initializer_range = 0.02
+        self.layer_norm_eps = 1e-5
+        self.output_attentions = False
+        self.output_hidden_states = False
     
+        self.duration_predictor_dropout_probs = 0.1
+        self.num_duration_conv_layers = 2
+        self.duration_predictor_filters = 256
+        self.duration_predictor_kernel_sizes = 3
+
+        # postnet
+        self.n_conv_postnet = 5
+        self.postnet_conv_filters = 512
+        self.postnet_conv_kernel_sizes = 5
+        self.postnet_dropout_rate = 0.1
+        
+        # encoder params
+        self.encoder_self_attention_params = SelfAttentionParams(
+            n_speakers=self.n_speakers,
+            hidden_size=self.encoder_hidden_size,
+            num_hidden_layers=self.encoder_num_hidden_layers,
+            num_attention_heads=self.encoder_num_attention_heads,
+            attention_head_size=self.encoder_attention_head_size,
+            hidden_act=self.encoder_hidden_act,
+            intermediate_size=self.encoder_intermediate_size,
+            intermediate_kernel_size=self.encoder_intermediate_kernel_size,
+            output_attentions=self.output_attentions,
+            output_hidden_states=self.output_hidden_states,
+            initializer_range=self.initializer_range,
+            hidden_dropout_prob=self.hidden_dropout_prob,
+            attention_probs_dropout_prob=self.attention_probs_dropout_prob,
+            layer_norm_eps=self.layer_norm_eps,
+            max_position_embeddings=self.max_position_embeddings,
+        )
+
+        # decoder params
+        self.decoder_self_attention_params = SelfAttentionParams(
+            n_speakers=self.n_speakers,
+            hidden_size=self.decoder_hidden_size,
+            num_hidden_layers=self.decoder_num_hidden_layers,
+            num_attention_heads=self.decoder_num_attention_heads,
+            attention_head_size=self.decoder_attention_head_size,
+            hidden_act=self.decoder_hidden_act,
+            intermediate_size=self.decoder_intermediate_size,
+            intermediate_kernel_size=self.decoder_intermediate_kernel_size,
+            output_attentions=self.output_attentions,
+            output_hidden_states=self.output_hidden_states,
+            initializer_range=self.initializer_range,
+            hidden_dropout_prob=self.hidden_dropout_prob,
+            attention_probs_dropout_prob=self.attention_probs_dropout_prob,
+            layer_norm_eps=self.layer_norm_eps,
+            max_position_embeddings=self.max_position_embeddings,
+        )
+                
         # data
         self.batch_size = 32
         self.test_size = 0.05
@@ -94,7 +167,7 @@ def main():
     config = Config(args.outdir)
     
     # define model.
-    fastspeech2 = TFFastSpeech2(config=config, training=False, name="fastspeech2", enable_tflite_convertible=args.tflite)
+    fastspeech2 = TFFastSpeech2(config=config, name="fastspeech2", enable_tflite_convertible=args.tflite)
     
     #build       
     if args.tflite is True:
