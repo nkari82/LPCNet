@@ -720,11 +720,11 @@ int main(int argc, const char** argv) {
 
 			data.resize(length);
 			norm.resize(length);
-			f0.resize(count + 1);
-			t.resize(count + 1);
+			f0.resize(size_t(count + 1));
+			t.resize(size_t(count + 1));
 
 			fseek(f1, 0, SEEK_SET);
-			fread(&data.front(), sizeof(short), length, f1);
+			fread(data.data(), sizeof(short), length, f1);
 			for (i = 0; i < length; ++i)
 			{
 				norm[i] = ((double)data[i]) / (double)32768;
@@ -738,8 +738,8 @@ int main(int argc, const char** argv) {
 			option.frame_period = 10.0;
 			option.speed = 1;
 			option.allowed_range = 0.1;
-			Dio(&norm.front(), length, 16000, &option, &t.front(), &f0.front());
-			StoneMask(&norm.front(), length, 16000, &t.front(), &f0.front(), f0.size(), &f0.front());
+			Dio(norm.data(), length, 16000, &option, t.data(), f0.data());
+			StoneMask(norm.data(), length, 16000, t.data(), f0.data(), f0.size(), f0.data());
 			for(i = 0; i < count; ++i)
 			{
 				float val = (float)f0[i];
