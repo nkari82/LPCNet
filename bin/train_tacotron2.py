@@ -22,7 +22,6 @@ import numpy as np
 import tensorflow_tts as tts
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-from tensorflow_tts.configs.tacotron2 import Tacotron2Config
 from tensorflow_tts.models import TFTacotron2
 from tensorflow_tts.optimizers import AdamWeightDecay, WarmUp
 from tensorflow_tts.trainers import Seq2SeqBasedTrainer
@@ -138,14 +137,13 @@ def generate_datasets(items, config, max_mel_length, max_ids_length):
     
     def _generator():
         for item in items:
-            tid, text_seq, feat_path, speaker_name = item
+            _, text_seq, feat_path, speaker_name = item
             text_seq_length = text_seq.shape[0]
             
             with open(feat_path, 'rb') as f:
                 mel = np.fromfile(f, dtype='float32')
                 mel = np.resize(mel, (-1, config.n_mels))
                 mel_length = mel.shape[0]
-                speaker = 0
 
             if f is None or mel_length < config.mel_length_threshold:
                 continue
@@ -162,7 +160,7 @@ def generate_datasets(items, config, max_mel_length, max_ids_length):
             data = {
                 "input_ids": text_seq,
                 "input_lengths": text_seq_length,
-                "speaker_ids": speaker,
+                "speaker_ids": 0,
                 "mel_gts": mel,
                 "mel_lengths": mel_length,
                 "g_attentions": g_attention 
@@ -393,8 +391,8 @@ def main():
     
     # select processor
     processor = JSpeechProcessor(args.rootdir)     # for test
-    config = Config(args.outdir, processor.vocab_size())
     
+    config = Config(args.outdir, processor.vocab_size())
     max_mel_length = processor.max_feat_size() // 4 // config.n_mels
     max_seq_length = processor.max_seq_length()
     
@@ -415,6 +413,7 @@ def main():
     with STRATEGY.scope():
         # define model.
         tacotron2 = TFTacotron2(config=config, training=True, name="tacotron2")
+        
         #build
         input_ids = np.array([[1, 2, 3, 4, 5, 6, 7, 8, 9]])
         input_lengths = np.array([9])

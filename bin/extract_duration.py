@@ -315,7 +315,7 @@ def main():
             assert (np.sum(d) == real_mel_length), f"different between sum_durations and len_mel, {np.sum(d)} and {real_mel_length}"
 
             # save D to folder.
-            np.save(os.path.join(args.outdir, f"{saved_name}.dur"),d.astype(np.int32),allow_pickle=False)
+            d.astype(np.int32).tofile(os.path.join(args.outdir, f"{saved_name}.dur"))
 
             # save alignment to debug.
             if args.save_alignment == 1:

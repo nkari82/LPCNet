@@ -20,27 +20,35 @@ _alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 symbols = [_pad] + _punctuation + _letters + list(_alphabet) + list(_numbers) + [_eos]
 
 class JSpeechProcessor(object):
-    def __init__(self, data_dir, cleaner_names="", metadata_filename="metadata.csv"):  
+    def __init__(self, rootdir, **kwargs):  
         self._tagger = MeCab.Tagger('')
         self._symbol_to_id = {c: i for i, c in enumerate(symbols)}
         self._id_to_symbol = {i: c for i, c in enumerate(symbols)}
-        self._data_dir = data_dir
-        self._cleaner_names = cleaner_names
+        self._rootdir = rootdir
         self._max_seq_length = 0
         self._max_feat_size = 0
-        self._speaker_name = "tsuchiya"
+        self._speaker = "tsuchiya"
+        self._metadata = kwargs.get('metadata',"metadata.csv")
+        self._with_extra = kwargs.get("with_extra", False)
         
-        if data_dir:
-            with open(os.path.join(data_dir, metadata_filename), encoding="utf-8") as f:
-                self.items = [self._split_line(data_dir, line, "|") for line in f]
+        if rootdir:
+            with open(os.path.join(rootdir, self._metadata), encoding="utf-8") as f:
+                self.items = [self._parse(line, "|") for line in f]
     
-    def _split_line(self, data_dir, line, split):
+    def _parse(self, rootdir, line, split):
         tid, text = line.strip().split(split)
-        feat_path = os.path.join(data_dir, "feats", f"{tid}.f32")
+        feat_path = os.path.join(rootdir, "feats", f"{tid}.f32")
         text_seq = np.asarray(self.text_to_sequence(text), np.int32)
         self._max_feat_size = max(self._max_feat_size, os.stat(feat_path).st_size)
         self._max_seq_length = max(self._max_seq_length, text_seq.shape[0])
-        return tid, text_seq, feat_path, self._speaker_name
+        
+        if self._with_extra is True:
+            f0_path = os.path.join(rootdir, "f0", f"{tid}.f0")
+            energy_path = os.path.join(rootdir, "energies", f"{tid}.e")
+            duration_path = os.path.join(rootdir, "durations", f"{tid}.dur")
+            return tid, text_seq, feat_path, f0_path, energy_path, duration_path, self._speaker
+        
+        return tid, text_seq, feat_path, self._speaker
         
     def _pronunciation(self, text):
         result = self._tagger.parse(text)
