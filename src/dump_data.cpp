@@ -230,7 +230,6 @@ static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_fi
 static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type, int silence, float gain)
 {
 	auto in_ext = in_path.filename().extension();
-	fprintf(stdout, "Convert: %s\r", in_path.string().c_str());
 	sox_encodinginfo_t out_encoding = 
 	{ 
 		SOX_ENCODING_SIGN2, 
@@ -393,7 +392,7 @@ int main(int argc, const char** argv) {
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("f,format", "If '1', the output format is 'bark bands[18] + pitch period and correction'", cxxopts::value<int>()->default_value("0"))
+		("f,format", "If '1', the output format is 'bark bands[18] + pitch period[19] and correction[20]'", cxxopts::value<int>()->default_value("0"))
 		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("1"))
 		("n,norm", "Normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
 		;
@@ -469,7 +468,7 @@ int main(int argc, const char** argv) {
 	switch (format)
 	{
 	case 1:
-		fprintf(stdout, "the output format is 'bark bands[18] + pitch + gain'\n");
+		fprintf(stdout, "the output format is 'bark bands[18] + pitch period[19] and correction[20]'\n");
 		break;
 	default:
 		break;
@@ -535,6 +534,10 @@ int main(int argc, const char** argv) {
 				if (in_ext == ".wav")
 				{
 					out.replace_extension(".s16");
+
+					fprintf(stdout, "Convert: %s\r", file.string().c_str());
+					fflush(stdout);
+
 					convert_to(file, out, "sw", silence, gain);
 				}
 
@@ -559,6 +562,7 @@ int main(int argc, const char** argv) {
 		count = 0;
 
 		fprintf(stdout, "Process file: %ws\r", input_file.c_str());
+		fflush(stdout);
 
 		auto in_ext = input_file.extension();
 		if (in_ext == ".wav")
