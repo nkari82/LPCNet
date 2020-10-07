@@ -393,7 +393,7 @@ def main():
     processor = JSpeechProcessor(args.rootdir)     # for test
     
     config = Config(args.outdir, processor.vocab_size())
-    max_mel_length = processor.max_feat_size() // 4 // config.n_mels
+    max_mel_length = processor.max_feat_length() // config.n_mels
     max_seq_length = processor.max_seq_length()
     
     # split train and test 

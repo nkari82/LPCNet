@@ -20,34 +20,41 @@ _alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 symbols = [_pad] + _punctuation + _letters + list(_alphabet) + list(_numbers) + [_eos]
 
 class JSpeechProcessor(object):
+    class Generater(object):
+        def __init__(self):
+            self._max_seq_length = 0
+            self._max_feat_size = 0
+    
+        def __call__(self, rootdir, tid, seq, speaker):
+            feat_path = os.path.join(self._rootdir, "feats", f"{tid}.f32")
+            self._max_feat_size = max(self._max_feat_size, os.stat(feat_path).st_size)
+            self._max_seq_length = max(self._max_seq_length, text_seq.shape[0])
+            
+            return tid, seq, feat_path, speaker
+            
+        def max_seq_length(self):
+            return self._max_seq_length
+        
+        def max_feat_length(self):
+            return self._max_feat_size / 4
+    
     def __init__(self, rootdir, **kwargs):  
         self._tagger = MeCab.Tagger('')
         self._symbol_to_id = {c: i for i, c in enumerate(symbols)}
         self._id_to_symbol = {i: c for i, c in enumerate(symbols)}
         self._rootdir = rootdir
-        self._max_seq_length = 0
-        self._max_feat_size = 0
         self._speaker = "tsuchiya"
         self._metadata = kwargs.get('metadata',"metadata.csv")
-        self._with_extra = kwargs.get("with_extra", False)
-        
+        self._generater = kwargs.get('generater', self.Generater())
+    
         if rootdir:
             with open(os.path.join(rootdir, self._metadata), encoding="utf-8") as f:
                 self.items = [self._parse(line, "|") for line in f]
+            self._generater.complete()
     
-    def _parse(self, rootdir, line, split):
+    def _parse(self, line, split):
         tid, text = line.strip().split(split)
-        feat_path = os.path.join(rootdir, "feats", f"{tid}.f32")
         text_seq = np.asarray(self.text_to_sequence(text), np.int32)
-        self._max_feat_size = max(self._max_feat_size, os.stat(feat_path).st_size)
-        self._max_seq_length = max(self._max_seq_length, text_seq.shape[0])
-        
-        if self._with_extra is True:
-            f0_path = os.path.join(rootdir, "f0", f"{tid}.f0")
-            energy_path = os.path.join(rootdir, "energies", f"{tid}.e")
-            duration_path = os.path.join(rootdir, "durations", f"{tid}.dur")
-            return tid, text_seq, feat_path, f0_path, energy_path, duration_path, self._speaker
-        
         return tid, text_seq, feat_path, self._speaker
         
     def _pronunciation(self, text):
@@ -75,10 +82,10 @@ class JSpeechProcessor(object):
         return unicodedata.normalize('NFKC', text)
 
     def max_seq_length(self):
-        return self._max_seq_length
+        return self._generater.max_seq_length();
         
-    def max_feat_size(self):
-        return self._max_feat_size
+    def max_feat_length(self):
+        return self._generater.max_feat_length();
         
     def vocab_size(self):
         return len(symbols)
@@ -110,7 +117,7 @@ class JSpeechProcessor(object):
         text = self._pronunciation(text)
         #print(text)
         
-#processor = JSpeechProcessor(data_dir=None)
+#processor = JSpeechProcessor(rootdir=None)
 #print(processor.vocab_size())  167
 #processor.text_to_sequence('また東寺のように五大明王と呼ばれる主要な明王の中央に配されることも多い。')
 #[71, 40, 49, 101, 33, 55, 81, 101, 52, 29, 41, 13, 72, 80, 101, 19, 101, 49, 81, 57, 85, 84, 32, 78, 81, 101, 51, 72, 80, 101, 19, 101, 55, 42, 78, 101, 19, 101, 52, 56, 13, 30, 85, 84, 28, 49, 75, 19, 101, 13, 4, 166]
