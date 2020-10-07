@@ -20,15 +20,16 @@ _alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 symbols = [_pad] + _punctuation + _letters + list(_alphabet) + list(_numbers) + [_eos]
 
 class JSpeechProcessor(object):
+
     class Generater(object):
         def __init__(self):
             self._max_seq_length = 0
             self._max_feat_size = 0
     
         def __call__(self, rootdir, tid, seq, speaker):
-            feat_path = os.path.join(self._rootdir, "feats", f"{tid}.f32")
+            feat_path = os.path.join(rootdir, "feats", f"{tid}.f32")
             self._max_feat_size = max(self._max_feat_size, os.stat(feat_path).st_size)
-            self._max_seq_length = max(self._max_seq_length, text_seq.shape[0])
+            self._max_seq_length = max(self._max_seq_length, seq.shape[0])
             
             return tid, seq, feat_path, speaker
             
@@ -36,7 +37,10 @@ class JSpeechProcessor(object):
             return self._max_seq_length
         
         def max_feat_length(self):
-            return self._max_feat_size / 4
+            return self._max_feat_size // 4 # // float32 4byte
+            
+        def complete(self):
+            pass
     
     def __init__(self, rootdir, **kwargs):  
         self._tagger = MeCab.Tagger('')
@@ -54,8 +58,8 @@ class JSpeechProcessor(object):
     
     def _parse(self, line, split):
         tid, text = line.strip().split(split)
-        text_seq = np.asarray(self.text_to_sequence(text), np.int32)
-        return tid, text_seq, feat_path, self._speaker
+        seq = np.asarray(self.text_to_sequence(text), np.int32)
+        return self._generater(self._rootdir, tid, seq, self._speaker)
         
     def _pronunciation(self, text):
         result = self._tagger.parse(text)

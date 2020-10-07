@@ -22,7 +22,6 @@ import numpy as np
 import tensorflow_tts as tts
 from tqdm import tqdm
 from numba import jit
-from tensorflow_tts.configs.tacotron2 import Tacotron2Config
 from tensorflow_tts.models import TFTacotron2
 from tensorflow_tts.utils import return_strategy
 from Processor import JSpeechProcessor
@@ -106,7 +105,7 @@ class Config(object):
     def __getitem__(self, key):
         return self.items[key]
        
-def generate_datasets(items, config, max_mel_length, max_seq_length):
+def generate_datasets(items, config, max_seq_length, max_mel_length):
 
     def _guided_attention(char_len, mel_len, max_char_len, max_mel_len, g=0.2):
         """Guided attention. Refer to page 3 on the paper."""
@@ -128,21 +127,20 @@ def generate_datasets(items, config, max_mel_length, max_seq_length):
     
     def _generator():
         for item in items:
-            tid, text_seq, feat_path, speaker_name = item
-            text_seq_length = text_seq.shape[0]
+            tid, seq, feat_path, _ = item
             
             with open(feat_path, 'rb') as f:
                 mel = np.fromfile(f, dtype='float32')
                 mel = np.resize(mel, (-1, config.n_mels))
-                mel_length = mel.shape[0]
-                speaker = 0
-
+            
+            seq_length = seq.shape[0]
+            mel_length = mel.shape[0]
             if f is None or mel_length < config.mel_length_threshold:
                 continue
                         
             # create guided attention (default).
             g_attention = _guided_attention(
-                text_seq_length,
+                seq_length,
                 mel_length,
                 max_seq_length,
                 max_mel_length,
@@ -151,9 +149,9 @@ def generate_datasets(items, config, max_mel_length, max_seq_length):
             
             data = { 
                 "utt_ids": tid,
-                "input_ids": text_seq,
-                "input_lengths": text_seq_length,
-                "speaker_ids": speaker,
+                "input_ids": seq,
+                "input_lengths": seq_length,
+                "speaker_ids": 0,
                 "mel_gts": mel,
                 "mel_lengths": mel_length,
                 "g_attentions": g_attention 
@@ -211,7 +209,7 @@ def get_duration_from_alignment(alignment):
         
     return D
     
-# python .\extract_duration.py --rootdir ./datasets/jsut/basic --outdir ./dump/durations --checkpoint model-171500.h5
+# python .\extract_duration.py --rootdir ./datasets/jsut/basic --outdir ./datasets/jsut/basic/durations --checkpoint model-211500.h5
 def main():
     """Running extract tacotron-2 durations."""
     parser = argparse.ArgumentParser(description="Extract durations from charactor with trained Tacotron-2 ")
@@ -244,14 +242,16 @@ def main():
         os.makedirs(args.outdir)
     
     # select processor
-    processor = JSpeechProcessor(args.rootdir)     # for test
+    Processor = JSpeechProcessor
+    
+    processor = Processor(args.rootdir)     # for test
     config = Config(args.outdir, processor.vocab_size(),1, args.batch_size)
     
-    max_mel_length = processor.max_feat_length() // config.n_mels
     max_seq_length = processor.max_seq_length()
+    max_mel_length = processor.max_feat_length() // config.n_mels
     
     # generate datasets
-    dataset = generate_datasets(processor.items, config, max_mel_length, max_seq_length)
+    dataset = generate_datasets(processor.items, config, max_seq_length, max_mel_length)
     
     # define model.
     tacotron2 = TFTacotron2(config=config, training=True, name="tacotron2")
