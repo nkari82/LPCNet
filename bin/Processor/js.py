@@ -51,15 +51,24 @@ class JSpeechProcessor(object):
         self._metadata = kwargs.get('metadata',"metadata.csv")
         self._generater = kwargs.get('generater', self.Generater())
     
+        self.items = []
         if rootdir:
             with open(os.path.join(rootdir, self._metadata), encoding="utf-8") as f:
-                self.items = [self._parse(line, "|") for line in f]
+                for line in f:
+                    item = self._parse(line, "|")
+                    item if item is None else self.items.append(item)
+                    
             self._generater.complete()
-    
+
     def _parse(self, line, split):
         tid, text = line.strip().split(split)
-        seq = np.asarray(self.text_to_sequence(text), np.int32)
-        return self._generater(self._rootdir, tid, seq, self._speaker)
+        item = None
+        try:
+            seq = np.asarray(self.text_to_sequence(text), np.int32)
+            item = self._generater(self._rootdir, tid, seq, self._speaker)
+        except Exception as ex:
+            print("tid: {}, err: {}, text: {}".format(tid, ex, text))
+        return item
         
     def _pronunciation(self, text):
         result = self._tagger.parse(text)
