@@ -468,7 +468,7 @@ def main():
     train_dataset = generate_datasets(train_split, config, generator.f0_stat(), generator.energy_stat())
     valid_dataset = generate_datasets(valid_split, config, generator.f0_stat(), generator.energy_stat())
     
-        # define trainer
+    # define trainer
     trainer = FastSpeech2Trainer(
         config=config,
         strategy=STRATEGY,
