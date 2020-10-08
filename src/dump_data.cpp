@@ -722,26 +722,23 @@ int main(int argc, const char** argv) {
 
 		if(!training && ff0 && f1)
 		{
-			std::vector<short> data;
-			std::vector<double> norm;
+			std::vector<short> raw;
+			std::vector<double> x;
 			std::vector<double> f0;
 			std::vector<double> t;
 
 			int length = ftell(f1) / sizeof(short);
 			int samples = GetSamplesForDIO(SAMPLE_RATE, length, 10.0);
 
-			data.resize(length);
-			norm.resize(length);
+			raw.resize(length);
+			x.resize(length);
 			f0.resize(std::max<size_t>(pcount, samples));
 			t.resize(size_t(samples));
 
 			fseek(f1, 0, SEEK_SET);
-			fread(data.data(), sizeof(short), length, f1);
+			fread(raw.data(), sizeof(short), length, f1);
 			for (i = 0; i < length; ++i)
-			{
-				norm[i] = ((double)data[i]) / (double)32768;
-				norm[i] = std::clamp(norm[i], -1.0, 1.0);
-			}
+				x[i] = std::clamp(((double)raw[i]) / 32768.0, -1.0, 1.0);
 
 			DioOption option;
 			option.f0_floor = 80.0;
@@ -750,8 +747,8 @@ int main(int argc, const char** argv) {
 			option.frame_period = 10.0;
 			option.speed = 1;
 			option.allowed_range = 0.1;
-			Dio(norm.data(), length, SAMPLE_RATE, &option, t.data(), f0.data());
-			StoneMask(norm.data(), length, SAMPLE_RATE, t.data(), f0.data(), f0.size(), f0.data());
+			Dio(x.data(), length, SAMPLE_RATE, &option, t.data(), f0.data());
+			StoneMask(x.data(), length, SAMPLE_RATE, t.data(), f0.data(), f0.size(), f0.data());
 			for(i = 0; i < pcount; ++i)
 			{
 				float val = (float)f0[i];
