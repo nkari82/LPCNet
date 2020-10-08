@@ -58,6 +58,8 @@ static_assert(false, "must include filesystem!");
 #include <world/dio.h>
 #include <world/stonemask.h>
 
+#define SAMPLE_RATE 16000
+
 extern "C"
 {
 #include "kiss_fft.h"
@@ -162,7 +164,7 @@ static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_fi
 		sox_false
 	};
 
-	sox_signalinfo_t in_signal = { 16000, 1, 16, 0, NULL };
+	sox_signalinfo_t in_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
 	sox_signalinfo_t interm_signal;
 	double rms_pk_lev_dB = 0.0;
 
@@ -241,8 +243,8 @@ static void convert_to(const fs::path& in_path, const fs::path& out_path, const 
 		sox_false 
 	};
 
-	sox_signalinfo_t out_signal = { 16000, 1, 16, 0, NULL };
-	sox_signalinfo_t in_signal = { 16000, 1, 16, 0, NULL };
+	sox_signalinfo_t out_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
+	sox_signalinfo_t in_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
 	sox_signalinfo_t interm_signal;
 
 	char* args[10];
@@ -383,6 +385,7 @@ int main(int argc, const char** argv) {
 	int format = 0;
 	int silence = 0;
 	int norm = 0;
+	int pcount = 0;
 	std::string input;
 	std::string output;
 	std::string mode;
@@ -537,7 +540,6 @@ int main(int argc, const char** argv) {
 
 					fprintf(stdout, "Convert: %s\r", file.string().c_str());
 					fflush(stdout);
-
 					convert_to(file, out, "sw", silence, gain);
 				}
 
@@ -560,6 +562,7 @@ int main(int argc, const char** argv) {
 	{
 		lpcnet_encoder_init(st);
 		count = 0;
+		pcount = 0;
 
 		fprintf(stdout, "Process file: %ws\r", input_file.c_str());
 		fflush(stdout);
@@ -570,6 +573,9 @@ int main(int argc, const char** argv) {
 			fs::path pcm_path = output_path_pcm;
 			pcm_path.append(input_file.filename().string());
 			pcm_path.replace_extension(".s16");
+
+			fprintf(stdout, "\nConvert: %s\r\b\r", input_file.string().c_str());
+			fflush(stdout);
 			convert_to(input_file, pcm_path, "sw", silence, gain);
 			input_file = pcm_path;
 		}
@@ -704,6 +710,7 @@ int main(int argc, const char** argv) {
 				unsigned char buf[8];
 				process_superframe(st, buf, ffeat, fe, encode, quantize, format);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
+				pcount += st->pcount;
 				st->pcount = 0;
 			}
 
@@ -713,19 +720,20 @@ int main(int argc, const char** argv) {
 			count++;
 		}
 
-		if(!training && ff0)
+		if(!training && ff0 && f1)
 		{
-			int length = count * FRAME_SIZE;
-			assert(length <= (ftell(f1) / sizeof(short)));
 			std::vector<short> data;
 			std::vector<double> norm;
 			std::vector<double> f0;
 			std::vector<double> t;
 
+			int length = ftell(f1) / sizeof(short);
+			int samples = GetSamplesForDIO(SAMPLE_RATE, length, 10.0);
+
 			data.resize(length);
 			norm.resize(length);
-			f0.resize(size_t(count + 1));
-			t.resize(size_t(count + 1));
+			f0.resize(std::max<size_t>(pcount, samples));
+			t.resize(size_t(samples));
 
 			fseek(f1, 0, SEEK_SET);
 			fread(data.data(), sizeof(short), length, f1);
@@ -742,9 +750,9 @@ int main(int argc, const char** argv) {
 			option.frame_period = 10.0;
 			option.speed = 1;
 			option.allowed_range = 0.1;
-			Dio(norm.data(), length, 16000, &option, t.data(), f0.data());
-			StoneMask(norm.data(), length, 16000, t.data(), f0.data(), f0.size(), f0.data());
-			for(i = 0; i < count; ++i)
+			Dio(norm.data(), length, SAMPLE_RATE, &option, t.data(), f0.data());
+			StoneMask(norm.data(), length, SAMPLE_RATE, t.data(), f0.data(), f0.size(), f0.data());
+			for(i = 0; i < pcount; ++i)
 			{
 				float val = (float)f0[i];
 				fwrite(&val, sizeof(float), 1, ff0);

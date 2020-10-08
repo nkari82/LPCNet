@@ -70,7 +70,7 @@ class Config(object):
         ],
     )
 
-    def __init__(self,outdir,vocab_size=150,n_speakers=1):
+    def __init__(self,outdir,batch_size=32,vocab_size=150,n_speakers=1):
         # fastspeech2 params
         self.vocab_size = vocab_size
         self.n_speakers = n_speakers
@@ -113,7 +113,7 @@ class Config(object):
         self.postnet_dropout_rate = 0.1
         
         # encoder params
-        self.encoder_self_attention_params = SelfAttentionParams(
+        self.encoder_self_attention_params = self.SelfAttentionParams(
             n_speakers=self.n_speakers,
             hidden_size=self.encoder_hidden_size,
             num_hidden_layers=self.encoder_num_hidden_layers,
@@ -132,7 +132,7 @@ class Config(object):
         )
 
         # decoder params
-        self.decoder_self_attention_params = SelfAttentionParams(
+        self.decoder_self_attention_params = self.SelfAttentionParams(
             n_speakers=self.n_speakers,
             hidden_size=self.decoder_hidden_size,
             num_hidden_layers=self.decoder_num_hidden_layers,
@@ -151,7 +151,7 @@ class Config(object):
         )
                 
         # data
-        self.batch_size = 32
+        self.batch_size = batch_size
         self.test_size = 0.05
         self.mel_length_threshold = 0
         self.guided_attention = 0.2
@@ -200,13 +200,13 @@ def generate_datasets(items, config, f0_stat, energy_stat):
             values = x[start:end][np.where(x[start:end] != 0.0)[0]]
             x_char[idx] = np.mean(values) if len(values) > 0 else 0.0  # np.mean([]) = nan.
 
-    return x_char.astype(np.float32)
+        return x_char.astype(np.float32)
     
     @tf.function(input_signature=[tf.TensorSpec(None, tf.float32), tf.TensorSpec(None, tf.int32)])
     def _tf_average_by_duration(x, durs):
         return tf.numpy_function(_average_by_duration, [x, durs], tf.float32)
             
-    def _norm_mean_std(self, x, mean, std):
+    def _norm_mean_std(x, mean, std):
         x = remove_outlier(x)
         zero_idxs = np.where(x == 0.0)[0]
         x = (x - mean) / std
@@ -219,8 +219,9 @@ def generate_datasets(items, config, f0_stat, energy_stat):
             
             with open(feat_path, 'rb') as f:
                 mel = np.fromfile(f, dtype='float32')
-                mel = np.resize(mel, (-1, config.n_mels))
-                mel_length = mel.shape[0]
+                mel = np.resize(mel, (-1, config.num_mels))
+
+            mel_length = mel.shape[0]
 
             if f is None or mel_length < config.mel_length_threshold:
                 continue
@@ -234,12 +235,12 @@ def generate_datasets(items, config, f0_stat, energy_stat):
             with open(duration_path, 'rb') as f:
                 duration = np.fromfile(f, dtype='int32')
             
-            #f0 = self._norm_mean_std(f0, self.f0_stat[0], self.f0_stat[1])
-            #energy = self._norm_mean_std(energy, self.energy_stat[0], self.energy_stat[1])
+            f0 = _norm_mean_std(f0, f0_stat[0], f0_stat[1])
+            energy = _norm_mean_std(energy, energy_stat[0], energy_stat[1])
             
             # calculate charactor f0/energy
-            f0 = tf_average_by_duration(f0, duration)
-            energy = tf_average_by_duration(energy, duration)
+            f0 = _tf_average_by_duration(f0, duration)
+            energy = _tf_average_by_duration(energy, duration)
             
             data = {
                 "input_ids": text_seq,
@@ -273,7 +274,7 @@ def generate_datasets(items, config, f0_stat, energy_stat):
         "duration_gts": [None],
         "f0_gts": [None],
         "energy_gts": [None],
-        "mel_gts": [None, config.n_mels],      
+        "mel_gts": [None, config.num_mels],      
         "mel_lengths": []
     }
     
@@ -352,19 +353,17 @@ class FastSpeech2Trainer(Seq2SeqBasedTrainer):
             mel_gts = mel_gts.numpy()
 
         # check directory
-        utt_ids = batch["utt_ids"].numpy()
-        dirname = os.path.join(self.config["outdir"], f"predictions/{self.steps}steps")
+        dirname = os.path.join(self.config.outdir, f"predictions/{self.steps}steps")
         if not os.path.exists(dirname):
             os.makedirs(dirname)
 
         for idx, (mel_gt, mel_before, mel_after) in enumerate(zip(mel_gts, mels_before, mels_after), 0):
-            mel_gt = tf.reshape(mel_gt, (-1, self.config.n_mels)).numpy()
-            mel_before = tf.reshape(mel_before, (-1, self.config.n_mels)).numpy()
-            mel_after = tf.reshape(mel_after, (-1, self.config.n_mels)).numpy()
+            mel_gt = tf.reshape(mel_gt, (-1, self.config.num_mels)).numpy()
+            mel_before = tf.reshape(mel_before, (-1, self.config.num_mels)).numpy()
+            mel_after = tf.reshape(mel_after, (-1, self.config.num_mels)).numpy()
 
             # plit figure and save it
-            utt_id = utt_ids[idx]
-            figname = os.path.join(dirname, f"{utt_id}.png")
+            figname = os.path.join(dirname, f"{idx}.png")
             fig = plt.figure(figsize=(10, 8))
             ax1 = fig.add_subplot(311)
             ax2 = fig.add_subplot(312)
@@ -382,6 +381,7 @@ class FastSpeech2Trainer(Seq2SeqBasedTrainer):
             plt.savefig(figname)
             plt.close()
 
+#python train_fastspeech2.py --outdir ./fit_fastspeech2 --rootdir ./datasets/jsut/basic --batch-size 1
 def main():
     """Run training process."""
     parser = argparse.ArgumentParser(description="Train Tacotron2")
@@ -389,6 +389,7 @@ def main():
     parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
     parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint file path to resume training. (default="")')
     parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
+    parser.add_argument("--batch-size", default=8, type=int, help="batch size.")
     parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     parser.add_argument("--pretrained",default="",type=str,nargs="?",help='pretrained weights .h5 file to load weights from. Auto-skips non-matching layers',)
     args = parser.parse_args()
@@ -421,18 +422,18 @@ def main():
     
     class Generator(Processor.Generator):
         def __init__(self):
-            super.__init__()
+            super().__init__()
             self._scaler_energy = StandardScaler(copy=False)
             self._scaler_f0 = StandardScaler(copy=False)
-            self._energy_stat = np.stack()
-            self._f0_stat = np.stack()
+            self._energy_stat = np.stack((0,0))
+            self._f0_stat = np.stack((0,0))
             
         def __call__(self, rootdir, tid, seq, speaker):
-            tid, seq, feat_path, speaker = super.__call__()
+            tid, seq, feat_path, speaker = super().__call__(rootdir, tid, seq, speaker)
             
-            f0_path = os.path.join(self._rootdir, "f0", f"{tid}.f0")
-            energy_path = os.path.join(self._rootdir, "energies", f"{tid}.e")
-            duration_path = os.path.join(self._rootdir, "durations", f"{tid}.dur")
+            f0_path = os.path.join(rootdir, "f0", f"{tid}.f0")
+            energy_path = os.path.join(rootdir, "energies", f"{tid}.e")
+            duration_path = os.path.join(rootdir, "durations", f"{tid}.dur")
             
             with open(f0_path) as f:
                 f0 = np.fromfile(f, dtype='float32')
@@ -444,20 +445,23 @@ def main():
             
             return tid, seq, feat_path, f0_path, energy_path, duration_path, speaker
          
-         def complete():
-            self._energy_stat = np.stack((self._scaler_energy.mean_, self._scaler_energy.scale_))
+        def complete(self):
             self._f0_stat = np.stack((self._scaler_f0.mean_, self._scaler_f0.scale_))
+            self._energy_stat = np.stack((self._scaler_energy.mean_, self._scaler_energy.scale_))
             
-        def energy_stat():
+            print("energy stat: {}".format(self._energy_stat))
+            print("f0 stat: {}".format(self._f0_stat))
+            
+        def energy_stat(self):
             return self._energy_stat
             
-        def f0_stat():
+        def f0_stat(self):
             return self._f0_stat
     
     generator = Generator()
-    processor = Processor(args.rootdir, generator=generator)     
+    processor = Processor(rootdir=args.rootdir, generator=generator)     
     
-    config = Config(args.outdir, processor.vocab_size())
+    config = Config(args.outdir, args.batch_size, processor.vocab_size())
     
     # split train and test 
     train_split, valid_split = train_test_split(processor.items, test_size=config.test_size,random_state=42,shuffle=True)

@@ -21,7 +21,7 @@ symbols = [_pad] + _punctuation + _letters + list(_alphabet) + list(_numbers) + 
 
 class JSpeechProcessor(object):
 
-    class Generater(object):
+    class Generator(object):
         def __init__(self):
             self._max_seq_length = 0
             self._max_feat_size = 0
@@ -49,7 +49,7 @@ class JSpeechProcessor(object):
         self._rootdir = rootdir
         self._speaker = "tsuchiya"
         self._metadata = kwargs.get('metadata',"metadata.csv")
-        self._generater = kwargs.get('generater', self.Generater())
+        self._generator = kwargs.get('generator', self.Generator())
     
         self.items = []
         if rootdir:
@@ -58,14 +58,14 @@ class JSpeechProcessor(object):
                     item = self._parse(line, "|")
                     item if item is None else self.items.append(item)
                     
-            self._generater.complete()
+            self._generator.complete()
 
     def _parse(self, line, split):
         tid, text = line.strip().split(split)
         item = None
         try:
             seq = np.asarray(self.text_to_sequence(text), np.int32)
-            item = self._generater(self._rootdir, tid, seq, self._speaker)
+            item = self._generator(self._rootdir, tid, seq, self._speaker)
         except Exception as ex:
             print("tid: {}, err: {}, text: {}".format(tid, ex, text))
         return item
@@ -95,10 +95,10 @@ class JSpeechProcessor(object):
         return unicodedata.normalize('NFKC', text)
 
     def max_seq_length(self):
-        return self._generater.max_seq_length();
+        return self._generator.max_seq_length();
         
     def max_feat_length(self):
-        return self._generater.max_feat_length();
+        return self._generator.max_feat_length();
         
     def vocab_size(self):
         return len(symbols)

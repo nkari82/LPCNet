@@ -74,7 +74,7 @@ class Config(object):
         self.postnet_dropout_rate = 0.1
         
         # encoder params
-        self.encoder_self_attention_params = SelfAttentionParams(
+        self.encoder_self_attention_params = self.SelfAttentionParams(
             n_speakers=self.n_speakers,
             hidden_size=self.encoder_hidden_size,
             num_hidden_layers=self.encoder_num_hidden_layers,
@@ -93,7 +93,7 @@ class Config(object):
         )
 
         # decoder params
-        self.decoder_self_attention_params = SelfAttentionParams(
+        self.decoder_self_attention_params = self.SelfAttentionParams(
             n_speakers=self.n_speakers,
             hidden_size=self.decoder_hidden_size,
             num_hidden_layers=self.decoder_num_hidden_layers,

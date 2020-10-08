@@ -36,7 +36,7 @@ for i in range(len(physical_devices)):
 STRATEGY = return_strategy()
 
 class Config(object):
-    def __init__(self,outdir,vocab_size=149,n_speakers=1,batch_size=8):
+    def __init__(self,outdir,batch_size=8,vocab_size=149,n_speakers=1):
         # tacotron2 params
         self.vocab_size = vocab_size                    # default
         self.embedding_hidden_size = 512            # 'embedding_hidden_size': 512
@@ -245,7 +245,7 @@ def main():
     Processor = JSpeechProcessor
     
     processor = Processor(args.rootdir)     # for test
-    config = Config(args.outdir, processor.vocab_size(),1, args.batch_size)
+    config = Config(args.outdir, args.batch_size, processor.vocab_size(),1)
     
     max_seq_length = processor.max_seq_length()
     max_mel_length = processor.max_feat_length() // config.n_mels
