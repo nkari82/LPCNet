@@ -52,13 +52,16 @@ static_assert(false, "must include filesystem!");
 #endif
 
 #define CPPGLOB_STATIC
+#define SAMPLE_RATE 16000
+//#define EXPORT_F0_ENERGY (deprecate)
+
 #include <cppglob/glob.hpp>
 #include <cppglob/iglob.hpp>
 #include <cxxopts.hpp>
+#if defined(EXPORT_F0_ENERGY)
 #include <world/dio.h>
 #include <world/stonemask.h>
-
-#define SAMPLE_RATE 16000
+#endif
 
 extern "C"
 {
@@ -365,8 +368,10 @@ int main(int argc, const char** argv) {
 	FILE* fm;
     FILE* ffeat;
     FILE* fpcm = NULL;
+#if defined(EXPORT_F0_ENERGY)
 	FILE* ff0 = NULL;
 	FILE* fe = NULL;
+#endif
     short pcm[FRAME_SIZE] = { 0 };
     short pcmbuf[FRAME_SIZE * 4] = { 0 };
     int noisebuf[FRAME_SIZE * 4] = { 0 };
@@ -483,9 +488,11 @@ int main(int argc, const char** argv) {
 	fs::path input_path(input);
 	fs::path output_path(output);
 	fs::path output_path_feats(output);
+	fs::path output_path_pcm(output);
+#if defined(EXPORT_F0_ENERGY)
 	fs::path output_path_f0(output);
 	fs::path output_path_energies(output);
-	fs::path output_path_pcm(output);
+#endif
 
 	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
 	std::list<fs::path> input_files(it, end);
@@ -494,16 +501,18 @@ int main(int argc, const char** argv) {
 	if (!training)
 	{
 		output_path_feats.append("feats");
-		output_path_f0.append("f0");
-		output_path_energies.append("energies");
 		output_path_pcm.append("pcm");
 
 		fs::create_directories(output_path_feats);
-		fs::create_directories(output_path_f0);
-		fs::create_directories(output_path_energies);
-
 		if (!input_files.empty() && input_files.front().extension() == ".wav")
 			fs::create_directories(output_path_pcm);
+
+#if defined(EXPORT_F0_ENERGY)
+		output_path_f0.append("f0");
+		output_path_energies.append("energies");
+		fs::create_directories(output_path_f0);
+		fs::create_directories(output_path_energies);
+#endif
 	}
 	
 	float gain(std::numeric_limits<float>::max());
@@ -623,6 +632,7 @@ int main(int argc, const char** argv) {
 				exit(1);
 			}
 		}
+#if defined(EXPORT_F0_ENERGY)
 		else
 		{
 			fs::path f0_path = output_path_f0;
@@ -645,6 +655,7 @@ int main(int argc, const char** argv) {
 				exit(1);
 			}
 		}
+#endif
 
 		while (1) {
 			float E = 0;
@@ -708,9 +719,15 @@ int main(int argc, const char** argv) {
 			/* Running on groups of 4 frames. */
 			if (++st->pcount == 4) {
 				unsigned char buf[8];
-				process_superframe(st, buf, ffeat, fe, encode, quantize, format);
+				process_superframe(st, buf, ffeat, encode, quantize, format);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
 				pcount += st->pcount;
+
+#if defined(EXPORT_F0_ENERGY)
+				for(i = 0; i < 4; ++i)
+					st->energy[i] = sqrt(st->energy[i] / (float)NB_BANDS);
+				fwrite(st->energy, sizeof(float), 4, fe);
+#endif
 				st->pcount = 0;
 			}
 
@@ -720,6 +737,7 @@ int main(int argc, const char** argv) {
 			count++;
 		}
 
+#if defined(EXPORT_F0_ENERGY)
 		if(!training && ff0 && f1)
 		{
 			std::vector<short> raw;
@@ -755,12 +773,12 @@ int main(int argc, const char** argv) {
 				fwrite(&val, sizeof(float), 1, ff0);
 			}
 		}
-
-		fclose(f1);
-		fclose(ffeat);
 		if (ff0) fclose(ff0);
 		if (fe) fclose(fe);
+#endif
 		if (fpcm) fclose(fpcm);
+		fclose(f1);
+		fclose(ffeat);
 	}
 	lpcnet_encoder_destroy(st);
 	sox_quit();

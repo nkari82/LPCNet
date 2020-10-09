@@ -46,7 +46,7 @@ datasets
 """
 
 class Config(object):
-    def __init__(self,outdir,vocab_size=149,n_speakers=1):
+    def __init__(self,outdir,batch_size=1,vocab_size=149,n_speakers=1):
         # tacotron2 params
         self.vocab_size = vocab_size                    # default
         self.embedding_hidden_size = 512            # 'embedding_hidden_size': 512
@@ -78,7 +78,7 @@ class Config(object):
         self.postnet_dropout_rate = 0.1                # 'postnet_dropout_rate': 0.1
         
         # data
-        self.batch_size = 32
+        self.batch_size = batch_size
         self.test_size = 0.05
         self.mel_length_threshold = 0
         self.guided_attention = 0.2
@@ -363,6 +363,7 @@ def main():
     parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
     parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint file path to resume training. (default="")')
     parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
+    parser.add_argument("--batch-size", default=12, type=int, help="batch size.")
     parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     args = parser.parse_args()
     
@@ -390,9 +391,12 @@ def main():
         os.makedirs(args.outdir)
     
     # select processor
-    processor = JSpeechProcessor(args.rootdir)     # for test
+    Processor = JSpeechProcessor     # for test
     
-    config = Config(args.outdir, processor.vocab_size())
+    Processor processor(rootdir=args.rootdir)
+    
+    config = Config(args.outdir, args.batch_size, processor.vocab_size())
+    
     max_mel_length = processor.max_feat_length() // config.n_mels
     max_seq_length = processor.max_seq_length()
     

@@ -519,7 +519,7 @@ void compute_frame_features(LPCNetEncState *st, const float *in) {
   }
   dct(st->features[st->pcount], Ly);
   st->features[st->pcount][0] -= 4;
-  st->energy[st->pcount] = sqrt(E / (float)NB_BANDS);
+  st->energy[st->pcount] = E;
   g = lpc_from_cepstrum(st->lpc, st->features[st->pcount]);
   st->features[st->pcount][2*NB_BANDS+2] = log10(g);
   for (i=0;i<LPC_ORDER;i++) st->features[st->pcount][2*NB_BANDS+3+i] = st->lpc[i];
@@ -555,7 +555,7 @@ void compute_frame_features(LPCNetEncState *st, const float *in) {
   }
 }
 
-void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, FILE *fe, int encode, int quantize, int format) {
+void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int encode, int quantize, int format) {
   int i;
   int sub;
   int best_i;
@@ -711,7 +711,7 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, FIL
 	  case 1: {
 		  for (i = 0; i < 4; i++) {
 			fwrite(st->features[i], sizeof(float), NB_BANDS, ffeat);
-			fwrite(st->features[i] + (NB_BANDS * 2), sizeof(float), 2, ffeat);  // added pitch, gain (18 + 2)
+			fwrite(st->features[i] + (NB_BANDS * 2), sizeof(float), 2, ffeat);  // added pitch period & correction (18 + 2)
 		  }
 		  break;
 	  }
@@ -722,11 +722,6 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, FIL
 		  break;
 	  }
 	  }
-  }
-
-  if (fe) {
-	fwrite(st->energy, sizeof(float), 4, fe);
-	//fprintf(stdout, "%f\n%f\n%f\n%f\n", st->energy[0], st->energy[1], st->energy[2], st->energy[3]);
   }
 }
 
@@ -749,7 +744,7 @@ LPCNET_EXPORT int lpcnet_encode(LPCNetEncState *st, const short *pcm, unsigned c
     st->pcount = k;
     compute_frame_features(st, x);
   }
-  process_superframe(st, buf, NULL, NULL, 1, 1, 0);
+  process_superframe(st, buf, NULL, 1, 1, 0);
   return 0;
 }
 
@@ -762,7 +757,7 @@ LPCNET_EXPORT int lpcnet_compute_features(LPCNetEncState *st, const short *pcm, 
     st->pcount = k;
     compute_frame_features(st, x);
   }
-  process_superframe(st, NULL, NULL, NULL, 0, 0, 0);
+  process_superframe(st, NULL, NULL, 0, 0, 0);
   for (k=0;k<4;k++) {
     RNN_COPY(&features[k][0], &st->features[k][0], NB_TOTAL_FEATURES);
   }

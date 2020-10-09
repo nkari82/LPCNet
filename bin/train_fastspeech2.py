@@ -44,6 +44,14 @@ datasets
     feats
         one.f32
         two.f32
+    pcm
+        one.s16
+    f0
+        one.f0
+    durations
+        one.dur
+    energies
+        one.e
     metadata.csv    
 """
 
@@ -154,7 +162,6 @@ class Config(object):
         self.batch_size = batch_size
         self.test_size = 0.05
         self.mel_length_threshold = 0
-        self.guided_attention = 0.2         # unused
         
         # optimizer
         self.initial_learning_rate = 0.001
@@ -165,7 +172,7 @@ class Config(object):
         
         # interval
         self.train_max_steps = 200000              
-        self.save_interval_steps = 2000             
+        self.save_interval_steps = 5000             
         self.eval_interval_steps = 500               
         self.log_interval_steps = 200                
         self.start_schedule_teacher_forcing = 200001
@@ -381,7 +388,7 @@ class FastSpeech2Trainer(Seq2SeqBasedTrainer):
             plt.close()
 
 #python train_fastspeech2.py --outdir ./fit_fastspeech2 --rootdir ./datasets/jsut/basic --batch-size 1 --resume ./fit_fastspeech2/checkpoints
-#python train_fastspeech2.py --outdir ./fit2_fastspeech2 --rootdir ./datasets/jsut/basic --batch-size 1 --resume ./fit_fastspeech2/checkpoints
+#python train_fastspeech2.py --outdir ./fit2_fastspeech2 --rootdir ./datasets/jsut/basic --batch-size 1 --resume ./fit2_fastspeech2/checkpoints
 def main():
     """Run training process."""
     parser = argparse.ArgumentParser(description="Train Tacotron2")
@@ -389,7 +396,7 @@ def main():
     parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
     parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint file path to resume training. (default="")')
     parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
-    parser.add_argument("--batch-size", default=8, type=int, help="batch size.")
+    parser.add_argument("--batch-size", default=16, type=int, help="batch size.")
     parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     parser.add_argument("--pretrained",default="",type=str,nargs="?",help='pretrained weights .h5 file to load weights from. Auto-skips non-matching layers',)
     args = parser.parse_args()
