@@ -28,7 +28,6 @@ from tensorflow_tts.models import TFFastSpeech2
 from tensorflow_tts.optimizers import AdamWeightDecay, WarmUp
 from tensorflow_tts.trainers import Seq2SeqBasedTrainer
 from tensorflow_tts.utils import (calculate_2d_loss, calculate_3d_loss, return_strategy)
-from tensorflow_tts.utils import remove_outlier
 from Processor import JSpeechProcessor
 
 sys.path.append(".")
@@ -49,6 +48,7 @@ datasets
 """
 
 class Config(object):
+
     SelfAttentionParams = collections.namedtuple(
         "SelfAttentionParams",
         [
@@ -154,7 +154,7 @@ class Config(object):
         self.batch_size = batch_size
         self.test_size = 0.05
         self.mel_length_threshold = 0
-        self.guided_attention = 0.2
+        self.guided_attention = 0.2         # unused
         
         # optimizer
         self.initial_learning_rate = 0.001
@@ -207,7 +207,6 @@ def generate_datasets(items, config, f0_stat, energy_stat):
         return tf.numpy_function(_average_by_duration, [x, durs], tf.float32)
             
     def _norm_mean_std(x, mean, std):
-        x = remove_outlier(x)
         zero_idxs = np.where(x == 0.0)[0]
         x = (x - mean) / std
         x[zero_idxs] = 0.0
@@ -381,7 +380,8 @@ class FastSpeech2Trainer(Seq2SeqBasedTrainer):
             plt.savefig(figname)
             plt.close()
 
-#python train_fastspeech2.py --outdir ./fit_fastspeech2 --rootdir ./datasets/jsut/basic --batch-size 1
+#python train_fastspeech2.py --outdir ./fit_fastspeech2 --rootdir ./datasets/jsut/basic --batch-size 1 --resume ./fit_fastspeech2/checkpoints
+#python train_fastspeech2.py --outdir ./fit2_fastspeech2 --rootdir ./datasets/jsut/basic --batch-size 1 --resume ./fit_fastspeech2/checkpoints
 def main():
     """Run training process."""
     parser = argparse.ArgumentParser(description="Train Tacotron2")
@@ -449,8 +449,8 @@ def main():
             self._f0_stat = np.stack((self._scaler_f0.mean_, self._scaler_f0.scale_))
             self._energy_stat = np.stack((self._scaler_energy.mean_, self._scaler_energy.scale_))
             
-            print("energy stat: {}".format(self._energy_stat))
-            print("f0 stat: {}".format(self._f0_stat))
+            print("energy stat: mean {}, scale {}".format(self._energy_stat[0], self._energy_stat[1]))
+            print("f0 stat: mean {}, scale {}".format(self._f0_stat[0], self._f0_stat[1]))
             
         def energy_stat(self):
             return self._energy_stat
