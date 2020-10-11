@@ -154,7 +154,7 @@ static void copy(FILE* from, FILE* to)
 	}
 }
 
-static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_files)
+static float get_normalize_gain(const std::list<fs::path>& input_files)
 {
 	sox_encodinginfo_t out_encoding =
 	{
@@ -228,108 +228,148 @@ static void calc_norm_gain(float& norm_gain, const std::list<fs::path>& input_fi
 	}
 
 	rms_pk_lev_dB = std::sqrt(rms_pk_lev_dB / (double)input_files.size());
-	norm_gain = (float)rms_pk_lev_dB;
 	fprintf(stdout, "RMS Pk lev dB: %f\n", rms_pk_lev_dB);
+	return (float)rms_pk_lev_dB;
 }
 
-static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type, int silence, float gain)
+static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type, const char* trim, const char* pad, float gain)
 {
+	// find effect
+	static const sox_effect_handler_t* input_efh = sox_find_effect("input");
+	static const sox_effect_handler_t* output_efh = sox_find_effect("output");
+	static const sox_effect_handler_t* gain_efh = sox_find_effect("gain");
+	static const sox_effect_handler_t* silence_efh = sox_find_effect("silence");
+	static const sox_effect_handler_t* reverse_efh = sox_find_effect("reverse");
+	static const sox_effect_handler_t* rate_efh = sox_find_effect("rate");
+	static const sox_effect_handler_t* channels_efh = sox_find_effect("channels");
+	static const sox_effect_handler_t* pad_efh = sox_find_effect("pad");
+	static const auto safe_sox_close = [](sox_format_t* f) { if (f != nullptr) sox_close(f); };
+
 	auto in_ext = in_path.filename().extension();
-	sox_encodinginfo_t out_encoding = 
-	{ 
-		SOX_ENCODING_SIGN2, 
-		16, 
-		std::numeric_limits<double>::infinity(), 
-		sox_option_default, 
-		sox_option_default, 
-		sox_option_default, 
-		sox_false 
+	sox_encodinginfo_t out_encoding =
+	{
+		SOX_ENCODING_SIGN2,
+		16,
+		std::numeric_limits<double>::infinity(),
+		sox_option_default,
+		sox_option_default,
+		sox_option_default,
+		sox_false
 	};
 
 	sox_signalinfo_t out_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
 	sox_signalinfo_t in_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
 	sox_signalinfo_t interm_signal;
 
-	char* args[10];
-	sox_format_t* in = sox_open_read(in_path.string().c_str(), (in_ext == ".wav") ? NULL : &in_signal, NULL, NULL);
-	sox_format_t* out = sox_open_write(out_path.string().c_str(), &out_signal, &out_encoding, type, NULL, NULL);
+	std::shared_ptr<sox_format_t> in = { sox_open_read(in_path.string().c_str(), (in_ext == ".wav") ? NULL : &in_signal, NULL, NULL), safe_sox_close };
+	std::shared_ptr<sox_format_t> out = { sox_open_write(out_path.string().c_str(), &out_signal, &out_encoding, type, NULL, NULL), safe_sox_close };
+	if (out.get() == nullptr) { std::cerr << "failed open out" << std::endl; return; }
 	interm_signal = in->signal; /* NB: deep copy */
 
-	sox_effects_chain_t* chain = sox_create_effects_chain(&in->encoding, &out->encoding);
-	sox_effect_t* e = sox_create_effect(sox_find_effect("input"));
-	args[0] = (char *)in, sox_effect_options(e, 1, args);
-	sox_add_effect(chain, e, &interm_signal, &in->signal);
-	free(e);
+	std::shared_ptr<sox_effects_chain_t> chain = { sox_create_effects_chain(&in->encoding, &out->encoding), sox_delete_effects_chain };
+	std::shared_ptr<sox_effect_t> e;
+	{
+		e = { sox_create_effect(input_efh), free };
+		const char* args[]{ (const char*)in.get() };
+		sox_effect_options(e.get(), 1, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &in->signal);
+	}
 
-	if (gain != std::numeric_limits<float>::max())
+	if (in->signal.rate != out->signal.rate)
+	{
+		e = { sox_create_effect(rate_efh), free };
+		sox_effect_options(e.get(), 0, NULL);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+	}
+
+	if (in->signal.channels != out->signal.channels)
+	{
+		e = { sox_create_effect(channels_efh), free };
+		sox_effect_options(e.get(), 0, NULL);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+	}
+
+	if (gain != 0.0f)
 	{
 		std::string option = std::to_string(gain);
-		e = sox_create_effect(sox_find_effect("gain"));
-		args[0] = (char*)option.c_str(), sox_effect_options(e, 1, args);
-		sox_add_effect(chain, e, &interm_signal, &out->signal);
-		free(e);
+		e = { sox_create_effect(gain_efh), free };
+		const char* args[]{ option.c_str() };
+		sox_effect_options(e.get(), 1, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
 	}
 
 	// https://digitalcardboard.com/blog/2009/08/25/the-sox-of-silence/comment-page-2/
 	// Trimming all (silence 1 0.1 1% -1 0.1 1%)
 	// Trimming begin (silence 1 0.1 1%)
-	switch (silence)
+	// [-l] above-periods [duration threshold[d|%] [below-periods duration threshold[d|%]]
+	if (trim != nullptr && std::strlen(trim) > 0)
 	{
-	case 1:
-	{
-		int trim_count = 2;
-		while (trim_count--)
+		std::stringstream ss(trim);
+		std::vector<std::string> tokens{ "2", "1%", "1%" };
+		for (int i = 0; i < 3 && std::getline(ss, tokens[i], ':');)
+			if (!tokens[i].empty()) i++;
+
+		int silence = std::stoi(tokens[0]);
+		switch (silence)
 		{
-			e = sox_create_effect(sox_find_effect("silence"));
-			args[0] = "1", args[1] = "0.1", args[2] = "1%", sox_effect_options(e, 3, args);
-			sox_add_effect(chain, e, &interm_signal, &out->signal);
-			free(e);
-
-			e = sox_create_effect(sox_find_effect("reverse"));
-			sox_effect_options(e, 0, NULL);
-			sox_add_effect(chain, e, &interm_signal, &out->signal);
-			free(e);
+		case 1: // begin
+		{
+			e = { sox_create_effect(silence_efh), free };
+			const char* args[]{ "1", "0.1", tokens[1].c_str() };
+			sox_effect_options(e.get(), 3, (char**)args);
+			sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+			break;
 		}
-		break;
+		case 2: // begin + end
+		{
+			for (int i = 1; i < 3; ++i)
+			{
+				e = { sox_create_effect(silence_efh), free };
+				const char* args[]{ "1", "0.1", tokens[i].c_str() };
+				sox_effect_options(e.get(), 3, (char**)args);
+				sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+
+				e = { sox_create_effect(reverse_efh), free };
+				sox_effect_options(e.get(), 0, NULL);
+				sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+			}
+			break;
+		}
+		case 3: // all
+		{
+			e = { sox_create_effect(silence_efh), free };
+			const char* args[]{ "1", "0.1", tokens[1].c_str(), "-1", "0.1", tokens[1].c_str() };
+			sox_effect_options(e.get(), 6, (char**)args);
+			sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+			break;
+		}
+		default:
+			break;
+		}
 	}
-	case 2:
+
+	// pad
+	if (pad != nullptr && std::strlen(pad) > 0)
 	{
-		e = sox_create_effect(sox_find_effect("silence"));
-		args[0] = "1", args[1] = "0.1", args[2] = "1%", args[0] = "-1", args[1] = "0.1", args[2] = "1%", sox_effect_options(e, 3, args);
-		sox_add_effect(chain, e, &interm_signal, &out->signal);
-		free(e);
-		break;
-	}
-	default:
-		break;
+		std::stringstream ss(pad);
+		std::vector<std::string> tokens{ "0", "0" };
+		for (int i = 0; i < 2 && std::getline(ss, tokens[i], ':');)
+			if (!tokens[i].empty()) i++;
+
+		e = { sox_create_effect(pad_efh), free };
+		const char* args[]{ tokens[0].c_str(), tokens[1].c_str() };
+		sox_effect_options(e.get(), 2, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
 	}
 
-	if (in->signal.rate != out->signal.rate)
 	{
-		e = sox_create_effect(sox_find_effect("rate"));
-		sox_effect_options(e, 0, NULL);
-		sox_add_effect(chain, e, &interm_signal, &out->signal);
-		free(e);
+		e = { sox_create_effect(output_efh), free };
+		const char* args[]{ (const char*)out.get() };
+		sox_effect_options(e.get(), 1, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
 	}
 
-	if (in->signal.channels != out->signal.channels)
-	{
-		e = sox_create_effect(sox_find_effect("channels"));
-		sox_effect_options(e, 0, NULL);
-		sox_add_effect(chain, e, &interm_signal, &out->signal);
-		free(e);
-	}
-
-	e = sox_create_effect(sox_find_effect("output"));
-	args[0] = (char *)out, sox_effect_options(e, 1, args);
-	sox_add_effect(chain, e, &interm_signal, &out->signal);
-	free(e);
-
-	sox_flow_effects(chain, NULL, NULL);
-
-	sox_delete_effects_chain(chain);
-	sox_close(out);
-	sox_close(in);
+	sox_flow_effects(chain.get(), NULL, NULL);
 }
 
 void show_help(const cxxopts::Options& options, const char* message = nullptr)
@@ -351,7 +391,12 @@ features[37:38] : pitch correlation
 features[39:55] : LPC
 window_size (=n_fft) = 320 (20ms)
 frame_shift(=hop_size) = 160 (10ms)
+
+examples
+-m test -f 1 -t 2:0.5%:0.5% -p 0:0.01 -i ./tsuchiya/tsuchiya_angry/*.wav -o ./tsuchiya/tsuchiya_angry/dump
+-m test -f 1 -t 2:0.5%:0.5% -p 0:0.01 -i D:/Voice/basic5000/wav/*.wav -o D:/Voice/basic5000/dump
 */
+
 int main(int argc, const char** argv) {
     int i;
     int count = 0;
@@ -388,12 +433,13 @@ int main(int argc, const char** argv) {
     int decode = 0;
     int quantize = 0;
 	int format = 0;
-	int silence = 0;
-	int norm = 0;
+	int normalize = 0;
 	int pcount = 0;
 	std::string input;
 	std::string output;
 	std::string mode;
+	std::string trim;
+	std::string pad;
 
 	cxxopts::Options options("dump_data", "LPCNet program");
 	options.add_options()
@@ -401,8 +447,9 @@ int main(int argc, const char** argv) {
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
 		("f,format", "If '1', the output format is 'bark bands[18] + pitch period[19] and correction[20]'", cxxopts::value<int>()->default_value("0"))
-		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("1"))
-		("n,norm", "Normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
+		("t,trim", "'WAV' file silent section trimming, '1' is begin, 2 is begin and end, '2' is all and threshold[:d%]", cxxopts::value<std::string>()->default_value("1:1%")) // best 2:0.5%:0.5%
+		("p,pad", "'WAV' file padding '0:1.5' is add 0 and 1.5 seconds to the begin and end", cxxopts::value<std::string>()->default_value("0:0")) // best 0:0.01 (10ms)
+		("n,norm", "normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
 		;
 
 	if (argc < 2)
@@ -441,7 +488,8 @@ int main(int argc, const char** argv) {
 			decode = 1;
 		}
 
-		silence = result["s"].as<int>();
+		trim = result["t"].as<std::string>();
+		pad = result["p"].as<std::string>();
 
 		if (result.count("i") == 0)
 		{
@@ -458,7 +506,7 @@ int main(int argc, const char** argv) {
 		input = result["i"].as<std::string>();
 		output = result["o"].as<std::string>();
 		format = result["f"].as<int>();
-		norm = result["n"].as<int>();
+		normalize = result["n"].as<int>();
 
 		if (result.count("help"))
 		{
@@ -501,9 +549,9 @@ int main(int argc, const char** argv) {
 	if (!training)
 	{
 		output_path_feats.append("feats");
-		output_path_pcm.append("pcm");
-
 		fs::create_directories(output_path_feats);
+
+		output_path_pcm.append("pcm");
 		if (!input_files.empty() && input_files.front().extension() == ".wav")
 			fs::create_directories(output_path_pcm);
 
@@ -515,12 +563,7 @@ int main(int argc, const char** argv) {
 #endif
 	}
 	
-	float gain(std::numeric_limits<float>::max());
-	if (norm)
-	{
-		std::string ext = input_path.filename().extension().string();
-		calc_norm_gain(gain, input_files);
-	}
+	float gain = normalize ? get_normalize_gain(input_files) : 0.0f;
 
 	if (training)
 	{
@@ -549,7 +592,7 @@ int main(int argc, const char** argv) {
 
 					fprintf(stdout, "Convert: %s\r", file.string().c_str());
 					fflush(stdout);
-					convert_to(file, out, "sw", silence, gain);
+					convert_to(file, out, "sw", trim.c_str(), pad.c_str(), gain);
 				}
 
 				FILE* to = fopen(out.string().c_str(), "rb");
@@ -585,7 +628,7 @@ int main(int argc, const char** argv) {
 
 			fprintf(stdout, "\nConvert: %s\r\b\r", input_file.string().c_str());
 			fflush(stdout);
-			convert_to(input_file, pcm_path, "sw", silence, gain);
+			convert_to(input_file, pcm_path, "sw", trim.c_str(), pad.c_str(), gain);
 			input_file = pcm_path;
 		}
 
