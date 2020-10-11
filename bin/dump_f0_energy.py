@@ -18,9 +18,13 @@ def generate(data):
     audio = data["audio"]
     mels = data["mels"]
 
+    # If the fft size is 2048, audio with 22050Hz sample rate is processed in 93 millisecond increments. 
+    # If it is 512, it is processed by 23 milliseconds.
+    
+    # lpcnet spec
+    fft_size = 320  # processed16000Hz 20ms
+    hop_size = 160 # 
     samplerate = 16000
-    fft_size = 320
-    hop_size = 160
     
     # check audio properties
     assert len(audio.shape) == 1, f"{tid} seems to be multi-channel signal."
@@ -30,9 +34,9 @@ def generate(data):
     D = librosa.stft(
         audio,
         n_fft=fft_size,
-        hop_length=hop_size,
-        win_length=None,
-        window='hann',
+        hop_length=hop_size,        # default: win_length // 4
+        win_length=None,            # default: win_length = n_fft 
+        window='hann',               # default: cosine window (‘hann’)
         pad_mode="reflect"
     )
     

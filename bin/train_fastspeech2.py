@@ -161,11 +161,11 @@ class Config(object):
         # data
         self.batch_size = batch_size
         self.test_size = 0.05
-        self.mel_length_threshold = 0
+        self.mel_length_threshold = 32
         
         # optimizer
         self.initial_learning_rate = 0.001
-        self.end_learning_rate = 0.00001
+        self.end_learning_rate = 0.00005 #
         self.decay_steps = 150000
         self.warmup_proportion = 0.02
         self.weight_decay= 0.001
@@ -175,10 +175,6 @@ class Config(object):
         self.save_interval_steps = 5000             
         self.eval_interval_steps = 500               
         self.log_interval_steps = 200                
-        self.start_schedule_teacher_forcing = 200001
-        self.start_ratio_value = 0.5               
-        self.schedule_decay_steps = 50000     
-        self.end_ratio_value = 0.0
         self.num_save_intermediate_results = 1
         
         self.outdir = outdir
