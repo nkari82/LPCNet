@@ -11,7 +11,7 @@ import numpy as np
 
 _pad = "pad"
 _eos = "eos"
-_punctuation = [".",",","、","。","！","？","!","?"]
+_punctuation = ["-","ー","、","。","！","？","!","?"]
 _cleaner = [" ","　","「","」","『","』","・","【","】","（","）","(", ")"]
 _letters = [chr(_) for _ in range(0x30A0, 0x30FF)]  # katakana
 _numbers = "0123456789"
@@ -131,6 +131,6 @@ class JSpeechProcessor(object):
         #print(text)
         
 #processor = JSpeechProcessor(rootdir=None)
-#print(processor.vocab_size())  167
+#print(processor.vocab_size())  # 167
 #processor.text_to_sequence('また東寺のように五大明王と呼ばれる主要な明王の中央に配されることも多い。')
 #[71, 40, 49, 101, 33, 55, 81, 101, 52, 29, 41, 13, 72, 80, 101, 19, 101, 49, 81, 57, 85, 84, 32, 78, 81, 101, 51, 72, 80, 101, 19, 101, 55, 42, 78, 101, 19, 101, 52, 56, 13, 30, 85, 84, 28, 49, 75, 19, 101, 13, 4, 166]

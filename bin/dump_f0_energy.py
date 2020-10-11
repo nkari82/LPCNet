@@ -22,7 +22,7 @@ def generate(data):
     # If it is 512, it is processed by 23 milliseconds.
     
     # lpcnet spec
-    fft_size = 320  # processed16000Hz 20ms
+    fft_size = 320  # or 640 processed16000Hz 20ms or 40ms
     hop_size = 160 # 
     samplerate = 16000
     
