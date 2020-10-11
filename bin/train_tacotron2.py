@@ -393,7 +393,7 @@ def main():
     # select processor
     Processor = JSpeechProcessor     # for test
     
-    Processor processor(rootdir=args.rootdir)
+    processor = Processor(rootdir=args.rootdir)
     
     config = Config(args.outdir, args.batch_size, processor.vocab_size())
     

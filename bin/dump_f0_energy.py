@@ -44,7 +44,7 @@ def generate(data):
     assert mels * hop_size == len(audio)
     
     # extract raw pitch
-    _f0, t = pw.dio(audio.astype(np.double),fs=samplerate,f0_ceil=7600,frame_period=1000 * hop_size / samplerate)
+    _f0, t = pw.dio(audio.astype(np.double),fs=samplerate,f0_ceil=8000,frame_period=1000 * hop_size / samplerate)
     f0 = pw.stonemask(audio.astype(np.double), _f0, t, samplerate)
     if len(f0) >= mels:
         f0 = f0[: mels]
@@ -95,7 +95,7 @@ def main():
     
     partial_fn = partial(generate)
     
-    p = Pool(2)
+    p = Pool(4)
     items = p.imap_unordered(partial_fn,tqdm(datasets, total=len(datasets), desc="[Preprocessing]"),chunksize=10)
     
     f0_path = os.path.join(rootdir, "f0")
