@@ -446,7 +446,7 @@ int main(int argc, const char** argv) {
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("f,format", "If '1', the output format is 'bark bands[18] + pitch period[19] and correction[20]'", cxxopts::value<int>()->default_value("0"))
+		("f,format", "If '1', the output format is 'bark bands[18] + pitch period[19] and correlation[20]'", cxxopts::value<int>()->default_value("0"))
 		("t,trim", "'WAV' file silent section trimming, '1' is begin, 2 is begin and end, '2' is all and threshold[:d%]", cxxopts::value<std::string>()->default_value("1:1%")) // best 2:0.5%:0.5%
 		("p,pad", "'WAV' file padding '0:1.5' is add 0 and 1.5 seconds to the begin and end", cxxopts::value<std::string>()->default_value("0:0")) // best 0:0.01 (10ms)
 		("n,norm", "normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
@@ -524,7 +524,7 @@ int main(int argc, const char** argv) {
 	switch (format)
 	{
 	case 1:
-		fprintf(stdout, "the output format is 'bark bands[18] + pitch period[19] and correction[20]'\n");
+		fprintf(stdout, "the output format is 'bark bands[18] + pitch period[19] and correlation[20]'\n");
 		break;
 	default:
 		break;
