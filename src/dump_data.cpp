@@ -53,15 +53,10 @@ static_assert(false, "must include filesystem!");
 
 #define CPPGLOB_STATIC
 #define SAMPLE_RATE 16000
-//#define EXPORT_F0_ENERGY (deprecate)
 
 #include <cppglob/glob.hpp>
 #include <cppglob/iglob.hpp>
 #include <cxxopts.hpp>
-#if defined(EXPORT_F0_ENERGY)
-#include <world/dio.h>
-#include <world/stonemask.h>
-#endif
 
 extern "C"
 {
@@ -104,7 +99,6 @@ void compute_noise(int* noise, float noise_std) {
 		noise[i] = (int)floor(.5 + noise_std * .707 * (log_approx((float)rand() / RAND_MAX) - log_approx((float)rand() / RAND_MAX)));
 	}
 }
-
 
 void write_audio(LPCNetEncState* st, const short* pcm, const int* noise, FILE* file) {
 	int i, k;
@@ -413,10 +407,6 @@ int main(int argc, const char** argv) {
 	FILE* fm;
     FILE* ffeat;
     FILE* fpcm = NULL;
-#if defined(EXPORT_F0_ENERGY)
-	FILE* ff0 = NULL;
-	FILE* fe = NULL;
-#endif
     short pcm[FRAME_SIZE] = { 0 };
     short pcmbuf[FRAME_SIZE * 4] = { 0 };
     int noisebuf[FRAME_SIZE * 4] = { 0 };
@@ -537,10 +527,6 @@ int main(int argc, const char** argv) {
 	fs::path output_path(output);
 	fs::path output_path_feats(output);
 	fs::path output_path_pcm(output);
-#if defined(EXPORT_F0_ENERGY)
-	fs::path output_path_f0(output);
-	fs::path output_path_energies(output);
-#endif
 
 	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
 	std::list<fs::path> input_files(it, end);
@@ -554,13 +540,6 @@ int main(int argc, const char** argv) {
 		output_path_pcm.append("pcm");
 		if (!input_files.empty() && input_files.front().extension() == ".wav")
 			fs::create_directories(output_path_pcm);
-
-#if defined(EXPORT_F0_ENERGY)
-		output_path_f0.append("f0");
-		output_path_energies.append("energies");
-		fs::create_directories(output_path_f0);
-		fs::create_directories(output_path_energies);
-#endif
 	}
 	
 	float gain = normalize ? get_normalize_gain(input_files) : 0.0f;
@@ -675,30 +654,6 @@ int main(int argc, const char** argv) {
 				exit(1);
 			}
 		}
-#if defined(EXPORT_F0_ENERGY)
-		else
-		{
-			fs::path f0_path = output_path_f0;
-			f0_path.append(input_file.filename().string());
-			f0_path.replace_extension(".f0");
-
-			ff0 = fopen(f0_path.string().c_str(), "wb");
-			if (ff0 == NULL) {
-				fprintf(stderr, "Error opening output f0 file: %s\n", f0_path.string().c_str());
-				exit(1);
-			}
-
-			fs::path energy_path = output_path_energies;
-			energy_path.append(input_file.filename().string());
-			energy_path.replace_extension(".e");
-
-			fe = fopen(energy_path.string().c_str(), "wb");
-			if (fe == NULL) {
-				fprintf(stderr, "Error opening output energy file: %s\n", energy_path.string().c_str());
-				exit(1);
-			}
-		}
-#endif
 
 		while (1) {
 			float E = 0;
@@ -765,12 +720,6 @@ int main(int argc, const char** argv) {
 				process_superframe(st, buf, ffeat, encode, quantize, format);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
 				pcount += st->pcount;
-
-#if defined(EXPORT_F0_ENERGY)
-				for(i = 0; i < 4; ++i)
-					st->energy[i] = sqrt(st->energy[i] / (float)NB_BANDS);
-				fwrite(st->energy, sizeof(float), 4, fe);
-#endif
 				st->pcount = 0;
 			}
 
@@ -779,46 +728,6 @@ int main(int argc, const char** argv) {
 			old_speech_gain = speech_gain;
 			count++;
 		}
-
-#if defined(EXPORT_F0_ENERGY)
-		if(!training && ff0 && f1)
-		{
-			std::vector<short> raw;
-			std::vector<double> x;
-			std::vector<double> f0;
-			std::vector<double> t;
-
-			int length = ftell(f1) / sizeof(short);
-			int samples = GetSamplesForDIO(SAMPLE_RATE, length, 10.0);
-
-			raw.resize(length);
-			x.resize(length);
-			f0.resize(std::max<size_t>(pcount, samples));
-			t.resize(size_t(samples));
-
-			fseek(f1, 0, SEEK_SET);
-			fread(raw.data(), sizeof(short), length, f1);
-			for (i = 0; i < length; ++i)
-				x[i] = std::clamp(((double)raw[i]) / 32768.0, -1.0, 1.0);
-
-			DioOption option;
-			option.f0_floor = 80.0;
-			option.f0_ceil = 7600.0;
-			option.channels_in_octave = 2.0;
-			option.frame_period = 10.0;
-			option.speed = 1;
-			option.allowed_range = 0.1;
-			Dio(x.data(), length, SAMPLE_RATE, &option, t.data(), f0.data());
-			StoneMask(x.data(), length, SAMPLE_RATE, t.data(), f0.data(), f0.size(), f0.data());
-			for(i = 0; i < pcount; ++i)
-			{
-				float val = (float)f0[i];
-				fwrite(&val, sizeof(float), 1, ff0);
-			}
-		}
-		if (ff0) fclose(ff0);
-		if (fe) fclose(fe);
-#endif
 		if (fpcm) fclose(fpcm);
 		fclose(f1);
 		fclose(ffeat);

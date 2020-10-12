@@ -10,7 +10,3 @@
 	path = thirdparty/sox
 	url = https://github.com/nkari82/sox.git
 	branch = master
-[submodule "thirdparty/world"]
-	path = thirdparty/world
-	url = https://github.com/nkari82/World.git
-	branch = master
