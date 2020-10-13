@@ -31,8 +31,67 @@
 
 #include <immintrin.h>
 
-#ifdef __AVX2__
-static __m256 exp8_approx(__m256 X)
+static __m128 exp4_approx_avx(__m128 X)
+{
+	const __m128 K0 = _mm_set1_ps(0.99992522f);
+	const __m128 K1 = _mm_set1_ps(0.69583354f);
+	const __m128 K2 = _mm_set1_ps(0.22606716f);
+	const __m128 K3 = _mm_set1_ps(0.078024523f);
+	const __m128 log2_E = _mm_set1_ps(1.44269504);
+	const __m128 max_in = _mm_set1_ps(50.f);
+	const __m128 min_in = _mm_set1_ps(-50.f);
+	const __m128i mask = _mm_set1_epi32(0x7fffffff);
+	__m128 XF, Y;
+	__m128i I;
+	X = _mm_mul_ps(X, log2_E);
+	X = _mm_max_ps(min_in, _mm_min_ps(max_in, X));
+	XF = _mm_floor_ps(X);
+	I = _mm_cvtps_epi32(XF);
+	X = _mm_sub_ps(X, XF);
+	Y = _mm_add_ps(_mm_mul_ps(_mm_add_ps(_mm_mul_ps(_mm_add_ps(_mm_mul_ps(K3, X), K2), X), K1), X), K0);
+
+	I = _mm_slli_epi32(I, 23);
+	Y = _mm_castsi128_ps(_mm_and_si128(mask, _mm_add_epi32(I, _mm_castps_si128(Y))));
+	return Y;
+}
+
+static __m128 exp4_approx_avx2(__m128 X)
+{
+	const __m128 K0 = _mm_set1_ps(0.99992522f);
+	const __m128 K1 = _mm_set1_ps(0.69583354f);
+	const __m128 K2 = _mm_set1_ps(0.22606716f);
+	const __m128 K3 = _mm_set1_ps(0.078024523f);
+	const __m128 log2_E = _mm_set1_ps(1.44269504);
+	const __m128 max_in = _mm_set1_ps(50.f);
+	const __m128 min_in = _mm_set1_ps(-50.f);
+	const __m128i mask = _mm_set1_epi32(0x7fffffff);
+	__m128 XF, Y;
+	__m128i I;
+	X = _mm_mul_ps(X, log2_E);
+	X = _mm_max_ps(min_in, _mm_min_ps(max_in, X));
+	XF = _mm_floor_ps(X);
+	I = _mm_cvtps_epi32(XF);
+	X = _mm_sub_ps(X, XF);
+	Y = _mm_fmadd_ps(_mm_fmadd_ps(_mm_fmadd_ps(K3, X, K2), X, K1), X, K0);
+	I = _mm_slli_epi32(I, 23);
+	Y = _mm_castsi128_ps(_mm_and_si128(mask, _mm_add_epi32(I, _mm_castps_si128(Y))));
+	return Y;
+}
+
+static __m256 exp8_approx_avx(__m256 X)
+{
+	__m256 Y;
+	__m128 Xhi, Xlo, Yhi, Ylo;
+	Xhi = _mm256_extractf128_ps(X, 1);
+	Xlo = _mm256_extractf128_ps(X, 0);
+	Yhi = exp4_approx_avx(Xhi);
+	Ylo = exp4_approx_avx(Xlo);
+	Y = _mm256_insertf128_ps(_mm256_setzero_ps(), Yhi, 1);
+	Y = _mm256_insertf128_ps(Y, Ylo, 0);
+	return Y;
+}
+
+static __m256 exp8_approx_avx2(__m256 X)
 {
    const __m256 K0 = _mm256_set1_ps(0.99992522f);
    const __m256 K1 = _mm256_set1_ps(0.69583354f);
@@ -54,44 +113,9 @@ static __m256 exp8_approx(__m256 X)
    Y = _mm256_castsi256_ps(_mm256_and_si256(mask, _mm256_add_epi32(I, _mm256_castps_si256(Y))));
    return Y;
 }
-#else
-#define _mm256_fmadd_ps(a,b,c) _mm256_add_ps(_mm256_mul_ps(a, b), c)
-#define _mm_fmadd_ps(a,b,c) _mm_add_ps(_mm_mul_ps(a, b), c)
-static __m128 exp4_approx(__m128 X)
-{
-   const __m128 K0 = _mm_set1_ps(0.99992522f);
-   const __m128 K1 = _mm_set1_ps(0.69583354f);
-   const __m128 K2 = _mm_set1_ps(0.22606716f);
-   const __m128 K3 = _mm_set1_ps(0.078024523f);
-   const __m128 log2_E = _mm_set1_ps(1.44269504);
-   const __m128 max_in = _mm_set1_ps(50.f);
-   const __m128 min_in = _mm_set1_ps(-50.f);
-   const __m128i mask = _mm_set1_epi32(0x7fffffff);
-   __m128 XF, Y;
-   __m128i I;
-   X = _mm_mul_ps(X, log2_E);
-   X = _mm_max_ps(min_in, _mm_min_ps(max_in, X));
-   XF = _mm_floor_ps(X);
-   I = _mm_cvtps_epi32(XF);
-   X = _mm_sub_ps(X, XF);
-   Y = _mm_fmadd_ps(_mm_fmadd_ps(_mm_fmadd_ps(K3, X, K2), X, K1), X, K0);
-   I = _mm_slli_epi32(I, 23);
-   Y = _mm_castsi128_ps(_mm_and_si128(mask, _mm_add_epi32(I, _mm_castps_si128(Y))));
-   return Y;
-}
-static __m256 exp8_approx(__m256 X)
-{
-   __m256 Y;
-   __m128 Xhi, Xlo, Yhi, Ylo;
-   Xhi = _mm256_extractf128_ps(X, 1);
-   Xlo = _mm256_extractf128_ps(X, 0);
-   Yhi = exp4_approx(Xhi);
-   Ylo = exp4_approx(Xlo);
-   Y = _mm256_insertf128_ps(_mm256_setzero_ps(), Yhi, 1);
-   Y = _mm256_insertf128_ps(Y, Ylo, 0);
-   return Y;
-}
-#endif
+
+static __m128 (*exp4_approx)(__m128) = exp4_approx_avx;
+static __m256 (*exp8_approx)(__m256 X) = exp8_approx_avx;
 
 static float celt_exp(float x)
 {
@@ -159,7 +183,7 @@ static void vec_sigmoid(float *y, const float *x, int N)
     }
 }
 
-static void sgemv_accum16(float *out, const float *weights, int rows, int cols, int col_stride, const float *x)
+static void sgemv_accum16_avx(float *out, const float *weights, int rows, int cols, int col_stride, const float *x)
 {
    int i, j;
    for (i=0;i<rows;i+=16)
@@ -180,16 +204,48 @@ static void sgemv_accum16(float *out, const float *weights, int rows, int cols, 
          vxj = _mm256_broadcast_ss(&x[j]);
 
          vw = _mm256_loadu_ps(&weights[j*col_stride + i]);
-         vy0 = _mm256_fmadd_ps(vw, vxj, vy0);
+         vy0 = _mm256_add_ps(_mm256_mul_ps(vw, vxj), vy0);
 
          vw = _mm256_loadu_ps(&weights[j*col_stride + i + 8]);
-         vy8 = _mm256_fmadd_ps(vw, vxj, vy8);
+         vy8 = _mm256_add_ps(_mm256_mul_ps(vw, vxj), vy8);
       }
       _mm256_storeu_ps (&y[0], vy0);
       _mm256_storeu_ps (&y[8], vy8);
    }
 }
-static void sparse_sgemv_accum16(float *out, const float *weights, int rows, const int *idx, const float *x)
+
+static void sgemv_accum16_avx2(float* out, const float* weights, int rows, int cols, int col_stride, const float* x)
+{
+	int i, j;
+	for (i = 0; i < rows; i += 16)
+	{
+#if defined(_MSC_VER )
+		float* __restrict y;
+#else
+		float* restrict y;
+#endif
+		__m256 vy0, vy8;
+		y = &out[i];
+		vy0 = _mm256_loadu_ps(&y[0]);
+		vy8 = _mm256_loadu_ps(&y[8]);
+		for (j = 0; j < cols; j++)
+		{
+			__m256 vxj;
+			__m256 vw;
+			vxj = _mm256_broadcast_ss(&x[j]);
+
+			vw = _mm256_loadu_ps(&weights[j * col_stride + i]);
+			vy0 = _mm256_fmadd_ps(vw, vxj, vy0);
+
+			vw = _mm256_loadu_ps(&weights[j * col_stride + i + 8]);
+			vy8 = _mm256_fmadd_ps(vw, vxj, vy8);
+		}
+		_mm256_storeu_ps(&y[0], vy0);
+		_mm256_storeu_ps(&y[8], vy8);
+	}
+}
+
+static void sparse_sgemv_accum16_avx(float *out, const float *weights, int rows, const int *idx, const float *x)
 {
    int i, j;
    for (i=0;i<rows;i+=16)
@@ -214,10 +270,10 @@ static void sparse_sgemv_accum16(float *out, const float *weights, int rows, con
          vxj = _mm256_broadcast_ss(&x[id]);
 
          vw = _mm256_loadu_ps(&weights[0]);
-         vy0 = _mm256_fmadd_ps(vw, vxj, vy0);
+         vy0 = _mm256_add_ps(_mm256_mul_ps(vw, vxj), vy0);
 
          vw = _mm256_loadu_ps(&weights[8]);
-         vy8 = _mm256_fmadd_ps(vw, vxj, vy8);
+         vy8 = _mm256_add_ps(_mm256_mul_ps(vw, vxj), vy8);
          weights += 16;
       }
       _mm256_storeu_ps (&y[0], vy0);
@@ -225,3 +281,69 @@ static void sparse_sgemv_accum16(float *out, const float *weights, int rows, con
    }
 }
 
+static void sparse_sgemv_accum16_avx2(float* out, const float* weights, int rows, const int* idx, const float* x)
+{
+	int i, j;
+	for (i = 0; i < rows; i += 16)
+	{
+#if defined(_MSC_VER)
+		float* __restrict y;
+#else
+		float* restrict y;
+#endif
+		int cols;
+		__m256 vy0, vy8;
+		y = &out[i];
+		vy0 = _mm256_loadu_ps(&y[0]);
+		vy8 = _mm256_loadu_ps(&y[8]);
+		cols = *idx++;
+		for (j = 0; j < cols; j++)
+		{
+			int id;
+			__m256 vxj;
+			__m256 vw;
+			id = *idx++;
+			vxj = _mm256_broadcast_ss(&x[id]);
+
+			vw = _mm256_loadu_ps(&weights[0]);
+			vy0 = _mm256_fmadd_ps(vw, vxj, vy0);
+
+			vw = _mm256_loadu_ps(&weights[8]);
+			vy8 = _mm256_fmadd_ps(vw, vxj, vy8);
+			weights += 16;
+		}
+		_mm256_storeu_ps(&y[0], vy0);
+		_mm256_storeu_ps(&y[8], vy8);
+	}
+}
+
+static void (*sgemv_accum16)(float*, const float*, int, int, int, const float*) = sgemv_accum16_avx;
+static void (*sparse_sgemv_accum16)(float*, const float*, int, const int*, const float*) = sparse_sgemv_accum16_avx;
+
+
+#if defined(_MSC_VER)
+#pragma section(".CRT$XIU",long,read)
+void vec_avx_init()
+#else
+__attribute__((constructor)) void vec_avx_init()
+#endif
+{
+	int registers[4];
+	__cpuid(registers, 0);
+
+	// avx2
+	if (registers[0] >= 7U)
+		__cpuidex(registers, 7, 0);
+
+	if ((registers[1] & (1 << 5)) != 0)
+	{
+		exp4_approx = exp4_approx_avx2;
+		exp8_approx = exp8_approx_avx2;
+		sgemv_accum16 = sgemv_accum16_avx2;
+		sparse_sgemv_accum16 = sparse_sgemv_accum16_avx2;
+	}
+}
+#if defined(_MSC_VER)
+__declspec(allocate(".CRT$XIU"))
+void (*vec_avx_initializer)() = vec_avx_init;
+#endif

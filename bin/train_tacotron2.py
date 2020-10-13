@@ -19,11 +19,9 @@ import argparse
 import logging
 import os
 import numpy as np
-import yaml
 import tensorflow_tts as tts
 from tqdm import tqdm
 from sklearn.model_selection import train_test_split
-from tensorflow_tts.configs.tacotron2 import Tacotron2Config
 from tensorflow_tts.models import TFTacotron2
 from tensorflow_tts.optimizers import AdamWeightDecay, WarmUp
 from tensorflow_tts.trainers import Seq2SeqBasedTrainer
@@ -48,7 +46,7 @@ datasets
 """
 
 class Config(object):
-    def __init__(self,outdir,vocab_size=149,n_speakers=1):
+    def __init__(self,outdir,batch_size=1,vocab_size=149,n_speakers=1):
         # tacotron2 params
         self.vocab_size = vocab_size                    # default
         self.embedding_hidden_size = 512            # 'embedding_hidden_size': 512
@@ -80,9 +78,9 @@ class Config(object):
         self.postnet_dropout_rate = 0.1                # 'postnet_dropout_rate': 0.1
         
         # data
-        self.batch_size = 32
+        self.batch_size = batch_size
         self.test_size = 0.05
-        self.mel_length_threshold = 0
+        self.mel_length_threshold = 32
         self.guided_attention = 0.2
         
         # optimizer
@@ -97,18 +95,18 @@ class Config(object):
         self.save_interval_steps = 2000             
         self.eval_interval_steps = 500               
         self.log_interval_steps = 200                
-        self.start_schedule_teacher_forcing = 200001
-        self.start_ratio_value = 0.5               
-        self.schedule_decay_steps = 50000     
-        self.end_ratio_value = 0.0
+        self.num_save_intermediate_results = 1
         
         self.outdir = outdir
-        self.items = { "outdir": outdir, 
-                         "batch_size": self.batch_size,
-                         "train_max_steps": self.train_max_steps,
-                         "log_interval_steps": self.log_interval_steps,
-                         "eval_interval_steps": self.eval_interval_steps,
-                         "save_interval_steps": self.save_interval_steps }
+        self.items = {
+            "outdir": outdir, 
+            "batch_size": self.batch_size,
+            "train_max_steps": self.train_max_steps,
+            "log_interval_steps": self.log_interval_steps,
+            "eval_interval_steps": self.eval_interval_steps,
+            "save_interval_steps": self.save_interval_steps,
+            "num_save_intermediate_results": self.num_save_intermediate_results 
+        }
         
     def __getitem__(self, key):
         return self.items[key]
@@ -135,41 +133,45 @@ def generate_datasets(items, config, max_mel_length, max_ids_length):
     
     def _generator():
         for item in items:
-            text_ids, feat_path, speaker_name = item
-            text_ids_length = text_ids.shape[0]
+            _, text_seq, feat_path, speaker_name = item
+            text_seq_length = text_seq.shape[0]
             
-            f = open(feat_path, 'rb')
-            mel = np.fromfile(f, dtype='float32')
-            mel = np.resize(mel, (-1, config.n_mels))
-            mel_length = mel.shape[0]
-            f.close()
-            speaker = 0
-            
-            if mel_length < config.mel_length_threshold:
+            with open(feat_path, 'rb') as f:
+                mel = np.fromfile(f, dtype='float32')
+                mel = np.resize(mel, (-1, config.n_mels))
+                mel_length = mel.shape[0]
+
+            if f is None or mel_length < config.mel_length_threshold:
                 continue
             
             # create guided attention (default).
             g_attention = _guided_attention(
-                text_ids_length,
+                text_seq_length,
                 mel_length,
                 max_ids_length,
                 max_mel_length,
                 config.guided_attention
             )
             
-            yield { "input_ids": text_ids,
-                     "input_lengths": text_ids_length,
-                     "speaker_ids": speaker,
-                     "mel_gts": mel,
-                     "mel_lengths": mel_length,
-                     "g_attentions": g_attention }
+            data = {
+                "input_ids": text_seq,
+                "input_lengths": text_seq_length,
+                "speaker_ids": 0,
+                "mel_gts": mel,
+                "mel_lengths": mel_length,
+                "g_attentions": g_attention 
+            }
+            
+            yield data;
 
-    output_types={ "input_ids": tf.int32,
-                        "input_lengths": tf.int32,
-                        "speaker_ids": tf.int32,
-                        "mel_gts": tf.float32,
-                        "mel_lengths": tf.int32, 
-                        "g_attentions": tf.float32 }
+    output_types = { 
+        "input_ids": tf.int32,
+        "input_lengths": tf.int32,
+        "speaker_ids": tf.int32,
+        "mel_gts": tf.float32,
+        "mel_lengths": tf.int32, 
+        "g_attentions": tf.float32 
+    }
                                                   
     datasets = tf.data.Dataset.from_generator(_generator, output_types=output_types)
     datasets = datasets.cache()
@@ -357,8 +359,12 @@ def main():
     parser.add_argument("--rootdir", type=str, required=True, help="dataset directory root")
     parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint file path to resume training. (default="")')
     parser.add_argument("--verbose",type=int,default=1,help="logging level. higher is more logging. (default=1)")
+    parser.add_argument("--batch-size", default=12, type=int, help="batch size.")
     parser.add_argument("--mixed_precision",default=0,type=int,help="using mixed precision for generator or not.")
     args = parser.parse_args()
+    
+    if args.resume is not None and os.path.isdir(args.resume):
+        args.resume = tf.train.latest_checkpoint(args.resume)
     
     # set mixed precision config
     if args.mixed_precision == 1:
@@ -381,16 +387,19 @@ def main():
         os.makedirs(args.outdir)
     
     # select processor
-    processor = JSpeechProcessor(args.rootdir)     # for test
-    config = Config(args.outdir, processor.vocab_size())
+    Processor = JSpeechProcessor     # for test
     
-    max_mel_length = processor.max_feat_size() // 4 // config.n_mels
-    max_ids_length = processor.max_ids_length()
+    processor = Processor(rootdir=args.rootdir)
+    
+    config = Config(args.outdir, args.batch_size, processor.vocab_size())
+    
+    max_mel_length = processor.max_feat_length() // config.n_mels
+    max_seq_length = processor.max_seq_length()
     
     # split train and test 
     train_split, valid_split = train_test_split(processor.items, test_size=config.test_size,random_state=42,shuffle=True)
-    train_dataset = generate_datasets(train_split, config, max_mel_length, max_ids_length)
-    valid_dataset = generate_datasets(valid_split, config, max_mel_length, max_ids_length)
+    train_dataset = generate_datasets(train_split, config, max_mel_length, max_seq_length)
+    valid_dataset = generate_datasets(valid_split, config, max_mel_length, max_seq_length)
      
     # define trainer
     trainer = Tacotron2Trainer(
@@ -404,6 +413,7 @@ def main():
     with STRATEGY.scope():
         # define model.
         tacotron2 = TFTacotron2(config=config, training=True, name="tacotron2")
+        
         #build
         input_ids = np.array([[1, 2, 3, 4, 5, 6, 7, 8, 9]])
         input_lengths = np.array([9])
@@ -442,16 +452,10 @@ def main():
 
     # start training
     try:
-        trainer.fit(
-            train_dataset,
-            valid_dataset,
-            saved_path=os.path.join(args.outdir, "checkpoints/"),
-            resume=args.resume
-        )
+        trainer.fit(train_dataset,valid_dataset,saved_path=os.path.join(args.outdir, "checkpoints/"),resume=args.resume)
     except KeyboardInterrupt:
         trainer.save_checkpoint()
         logging.info(f"Successfully saved checkpoint @ {trainer.steps}steps.")
-
 
 if __name__ == "__main__":
     main()

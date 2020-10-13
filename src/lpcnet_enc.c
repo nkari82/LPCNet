@@ -496,7 +496,7 @@ static void frame_analysis(LPCNetEncState *st, kiss_fft_cpx *X, float *Ex, const
 void compute_frame_features(LPCNetEncState *st, const float *in) {
   float aligned_in[FRAME_SIZE];
   int i;
-  float E = 0;
+  float E = 0.0f;
   float Ly[NB_BANDS];
   float follow, logMax;
   float g;
@@ -515,10 +515,11 @@ void compute_frame_features(LPCNetEncState *st, const float *in) {
     Ly[i] = MAX16(logMax-8, MAX16(follow-2.5, Ly[i]));
     logMax = MAX16(logMax, Ly[i]);
     follow = MAX16(follow-2.5, Ly[i]);
-    E += Ex[i];
+    E += Ex[i] * Ex[i];
   }
   dct(st->features[st->pcount], Ly);
   st->features[st->pcount][0] -= 4;
+  st->energy[st->pcount] = E;
   g = lpc_from_cepstrum(st->lpc, st->features[st->pcount]);
   st->features[st->pcount][2*NB_BANDS+2] = log10(g);
   for (i=0;i<LPC_ORDER;i++) st->features[st->pcount][2*NB_BANDS+3+i] = st->lpc[i];
@@ -554,7 +555,7 @@ void compute_frame_features(LPCNetEncState *st, const float *in) {
   }
 }
 
-void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int encode, int quantize) {
+void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int encode, int quantize, int format) {
   int i;
   int sub;
   int best_i;
@@ -590,7 +591,8 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int
       max_prev = st->pitch_max_path_all - 6.f;
       pitch_prev[sub][i] = st->best_i;
       for (j=IMIN(0, 4-i);j<=4 && i+j<PITCH_MAX_PERIOD-PITCH_MIN_PERIOD;j++) {
-        if (st->pitch_max_path[0][i+j] > max_prev) {
+        // if (st->pitch_max_path[0][i+j] > max_prev) {                        // master
+        if (st->pitch_max_path[0][i + j] - .02f*abs(j)*abs(j) > max_prev) {   // branch exp_fixes
           max_prev = st->pitch_max_path[0][i+j] - .02f*abs(j)*abs(j);
           pitch_prev[sub][i] = i+j;
         }
@@ -619,9 +621,9 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int
   }
   frame_corr /= 8;
   if (quantize && frame_corr < 0) frame_corr = 0;
-  for (sub=0;sub<8;sub++) {
-    //printf("%d %f\n", best[2+sub], frame_corr);
-  }
+  //for (sub=0;sub<8;sub++) {
+  //  printf("%d %f\n", best[2+sub], frame_corr);
+  //}
   //printf("\n");
   for (sub=2;sub<10;sub++) {
     w = st->frame_weight[sub];
@@ -662,10 +664,12 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int
     if (quantize) {
       float p = pow(2.f, main_pitch/21.)*PITCH_MIN_PERIOD;
       p *= 1 + modulation/16./7.*(2*sub-3);
+	  p = MIN16(255, MAX16(32, p)); // exp_fixes
       st->features[sub][2*NB_BANDS] = .02*(p-100);
       st->features[sub][2*NB_BANDS + 1] = frame_corr-.5;
     } else {
-      st->features[sub][2*NB_BANDS] = .01*(best[2+2*sub]+best[2+2*sub+1]-200);
+      //st->features[sub][2*NB_BANDS] = .01*(best[2+2*sub]+best[2+2*sub+1]-200);    // master
+      st->features[sub][2*NB_BANDS] = .01*(IMAX(64, IMIN(510, best[2+2*sub]+best[2+2*sub+1]))-200);    // branch exp_fixes
       st->features[sub][2*NB_BANDS + 1] = frame_corr-.5;
     }
     //printf("%f %d %f\n", st->features[sub][2*NB_BANDS], best[2+2*sub], frame_corr);
@@ -706,18 +710,21 @@ void process_superframe(LPCNetEncState *st, unsigned char *buf, FILE *ffeat, int
     bits_pack(&bits, interp_id, 3);
     if (ffeat) fwrite(buf, 1, 8, ffeat);
   } else if (ffeat) {
-    for (i=0;i<4;i++) {
-        switch (st->type)
-        {
-        case 1: // taco
-            fwrite(st->features[i], sizeof(float), NB_BANDS, ffeat);
-            fwrite(st->features[i] + (NB_BANDS*2), sizeof(float), 2, ffeat);  // added pitch, gain (18 + 2)
-            break;
-        default:
-            fwrite(st->features[i], sizeof(float), NB_TOTAL_FEATURES, ffeat);
-            break;
-        }
-    }
+	  switch (format) {
+	  case 1: {
+		  for (i = 0; i < 4; i++) {
+			fwrite(st->features[i], sizeof(float), NB_BANDS, ffeat);
+			fwrite(st->features[i] + (NB_BANDS * 2), sizeof(float), 2, ffeat);  // added pitch period & correction (18 + 2)
+		  }
+		  break;
+	  }
+	  default: {
+		  for (i = 0; i < 4; i++) {
+			fwrite(st->features[i], sizeof(float), NB_TOTAL_FEATURES, ffeat);
+		  }
+		  break;
+	  }
+	  }
   }
 }
 
@@ -740,7 +747,7 @@ LPCNET_EXPORT int lpcnet_encode(LPCNetEncState *st, const short *pcm, unsigned c
     st->pcount = k;
     compute_frame_features(st, x);
   }
-  process_superframe(st, buf, NULL, 1, 1);
+  process_superframe(st, buf, NULL, 1, 1, 0);
   return 0;
 }
 
@@ -753,7 +760,7 @@ LPCNET_EXPORT int lpcnet_compute_features(LPCNetEncState *st, const short *pcm, 
     st->pcount = k;
     compute_frame_features(st, x);
   }
-  process_superframe(st, NULL, NULL, 0, 0);
+  process_superframe(st, NULL, NULL, 0, 0, 0);
   for (k=0;k<4;k++) {
     RNN_COPY(&features[k][0], &st->features[k][0], NB_TOTAL_FEATURES);
   }

@@ -31,8 +31,8 @@
 #include <math.h>
 #include <assert.h>
 #include <sox.h>
-#if defined(__cplusplus)
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 #include <list>
@@ -40,27 +40,26 @@
 #include <type_traits>
 
 #ifdef __has_include
-#  if __has_include(<filesystem>)
-#    include <filesystem>
-	  namespace fs = std::filesystem;
-#  elif __has_include(<experimental/filesystem>)
-#    include <experimental/filesystem>
-	  namespace fs = std::experimental::filesystem;
-#  else
-	  static_assert(false, "must include filesystem!");
-#  endif
+#if __has_include(<filesystem>)
+#include <filesystem>
+namespace fs = std::filesystem;
+#elif __has_include(<experimental/filesystem>)
+#include <experimental/filesystem>
+namespace fs = std::experimental::filesystem;
+#else
+static_assert(false, "must include filesystem!");
+#endif
 #endif
 
 #define CPPGLOB_STATIC
-#include <cppglob/glob.hpp>  // cppglob::glob
-#include <cppglob/iglob.hpp>  // cppglob::iglob
+#define SAMPLE_RATE 16000
 
-//#define CXXOPTS_NO_EXCEPTIONS
+#include <cppglob/glob.hpp>
+#include <cppglob/iglob.hpp>
 #include <cxxopts.hpp>
 
 extern "C"
 {
-#endif
 #include "kiss_fft.h"
 #include "common.h"
 #include "freq.h"
@@ -69,76 +68,73 @@ extern "C"
 #include "celt_lpc.h"
 #include "lpcnet.h"
 #include "lpcnet_private.h"
-#if defined(__cplusplus)
 }
-#endif
 
 static void biquad(float* y, float mem[2], const float* x, const float* b, const float* a, int N) {
-    int i;
-    for (i = 0; i < N; i++) {
-        float xi, yi;
-        xi = x[i];
-        yi = x[i] + mem[0];
-        mem[0] = mem[1] + (b[0] * (double)xi - a[0] * (double)yi);
-        mem[1] = (b[1] * (double)xi - a[1] * (double)yi);
-        y[i] = yi;
-    }
+	int i;
+	for (i = 0; i < N; i++) {
+		float xi, yi;
+		xi = x[i];
+		yi = x[i] + mem[0];
+		mem[0] = mem[1] + (b[0] * (double)xi - a[0] * (double)yi);
+		mem[1] = (b[1] * (double)xi - a[1] * (double)yi);
+		y[i] = yi;
+	}
 }
 
 static float uni_rand() {
-    return rand() / (double)RAND_MAX - .5;
+	return rand() / (double)RAND_MAX - .5;
 }
 
 static void rand_resp(float* a, float* b) {
-    a[0] = .75 * uni_rand();
-    a[1] = .75 * uni_rand();
-    b[0] = .75 * uni_rand();
-    b[1] = .75 * uni_rand();
+	a[0] = .75 * uni_rand();
+	a[1] = .75 * uni_rand();
+	b[0] = .75 * uni_rand();
+	b[1] = .75 * uni_rand();
 }
 
 void compute_noise(int* noise, float noise_std) {
-    int i;
-    for (i = 0; i < FRAME_SIZE; i++) {
-        noise[i] = (int)floor(.5 + noise_std * .707 * (log_approx((float)rand() / RAND_MAX) - log_approx((float)rand() / RAND_MAX)));
-    }
+	int i;
+	for (i = 0; i < FRAME_SIZE; i++) {
+		noise[i] = (int)floor(.5 + noise_std * .707 * (log_approx((float)rand() / RAND_MAX) - log_approx((float)rand() / RAND_MAX)));
+	}
 }
 
-
 void write_audio(LPCNetEncState* st, const short* pcm, const int* noise, FILE* file) {
-    int i, k;
-    for (k = 0; k < 4; k++) {
-        unsigned char data[4 * FRAME_SIZE];
-        for (i = 0; i < FRAME_SIZE; i++) {
-            float p = 0;
-            float e;
-            int j;
-            for (j = 0; j < LPC_ORDER; j++) p -= st->features[k][2 * NB_BANDS + 3 + j] * st->sig_mem[j];
-            e = lin2ulaw(pcm[k * FRAME_SIZE + i] - p);
-            /* Signal. */
-            data[4 * i] = lin2ulaw(st->sig_mem[0]);
-            /* Prediction. */
-            data[4 * i + 1] = lin2ulaw(p);
-            /* Excitation in. */
-            data[4 * i + 2] = st->exc_mem;
-            /* Excitation out. */
-            data[4 * i + 3] = e;
-            /* Simulate error on excitation. */
-            e += noise[k * FRAME_SIZE + i];
-            e = IMIN(255, IMAX(0, e));
+	int i, k;
+	for (k = 0; k < 4; k++) {
+		unsigned char data[4 * FRAME_SIZE];
+		for (i = 0; i < FRAME_SIZE; i++) {
+			float p = 0;
+			float e;
+			int j;
+			for (j = 0; j < LPC_ORDER; j++) p -= st->features[k][2 * NB_BANDS + 3 + j] * st->sig_mem[j];
+			e = lin2ulaw(pcm[k * FRAME_SIZE + i] - p);
+			/* Signal. */
+			data[4 * i] = lin2ulaw(st->sig_mem[0]);
+			/* Prediction. */
+			data[4 * i + 1] = lin2ulaw(p);
+			/* Excitation in. */
+			data[4 * i + 2] = st->exc_mem;
+			/* Excitation out. */
+			data[4 * i + 3] = e;
+			/* Simulate error on excitation. */
+			e += noise[k * FRAME_SIZE + i];
+			e = IMIN(255, IMAX(0, e));
 
-            RNN_MOVE(&st->sig_mem[1], &st->sig_mem[0], LPC_ORDER - 1);
-            st->sig_mem[0] = p + ulaw2lin(e);
-            st->exc_mem = e;
-        }
-        fwrite(data, 4 * FRAME_SIZE, 1, file);
-    }
+			RNN_MOVE(&st->sig_mem[1], &st->sig_mem[0], LPC_ORDER - 1);
+			st->sig_mem[0] = p + ulaw2lin(e);
+			st->exc_mem = e;
+		}
+		fwrite(data, 4 * FRAME_SIZE, 1, file);
+	}
 }
 
 static short float2short(float x)
 {
-    int i;
-    i = (int)floor(.5 + x);
-    return IMAX(-32767, IMIN(32767, i));
+	int i;
+	i = (int)floor(.5 + x);
+	return IMAX(-32767, IMIN(32767, i));
 }
 
 static void copy(FILE* from, FILE* to)
@@ -152,94 +148,248 @@ static void copy(FILE* from, FILE* to)
 	}
 }
 
-static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type = "sw", int silence = 0)
+static float get_normalize_gain(const std::list<fs::path>& input_files)
 {
-	fprintf(stdout, "Convert: %s\n", in_path.string().c_str());
+	sox_encodinginfo_t out_encoding =
+	{
+		SOX_ENCODING_UNKNOWN,
+		0,
+		std::numeric_limits<double>::infinity(),
+		sox_option_no,
+		sox_option_no,
+		sox_option_no,
+		sox_false
+	};
 
+	sox_signalinfo_t in_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
 	sox_signalinfo_t interm_signal;
-	sox_encodinginfo_t out_encoding = { SOX_ENCODING_SIGN2, 16, 0, sox_option_default, sox_option_default, sox_option_default, sox_false };
-	sox_signalinfo_t out_signal = { 16000, 1, 16, 0, NULL };
-
-	sox_signalinfo_t default_in_signal = { 16000, 1, 16, 0, NULL };
-	sox_signalinfo_t* in_signal = NULL;
-
-	if (strcmp(type, "wav") == 0)
-		in_signal = &default_in_signal;
+	double rms_pk_lev_dB = 0.0;
 
 	char* args[10];
-	sox_format_t* in = sox_open_read(in_path.string().c_str(), in_signal, NULL, NULL);
-	sox_format_t* out = sox_open_write(out_path.string().c_str(), &out_signal, &out_encoding, type, NULL, NULL);
-
-	sox_effects_chain_t* chain = sox_create_effects_chain(&in->encoding, &out->encoding);
-	interm_signal = in->signal; /* NB: deep copy */
-
-	sox_effect_t* e = sox_create_effect(sox_find_effect("input"));
-	args[0] = (char *)in, sox_effect_options(e, 1, args);
-	sox_add_effect(chain, e, &interm_signal, &in->signal);
-	free(e);
-
-	// https://digitalcardboard.com/blog/2009/08/25/the-sox-of-silence/comment-page-2/
-	// Trimming all (silence 1 0.1 1% -1 0.1 1%)
-	// Trimming begin (silence 1 0.1 1%)
-	switch (silence)
+	for (auto& path : input_files)
 	{
-	case 1:
-	{
-		int trim_count = 2;
-		while (trim_count--)
-		{
-			e = sox_create_effect(sox_find_effect("silence"));
-			args[0] = "1", args[1] = "0.1", args[2] = "1%", sox_effect_options(e, 3, args);
-			sox_add_effect(chain, e, &interm_signal, &out->signal);
-			free(e);
+		auto in_ext = path.filename().extension();
+		sox_format_t* in = sox_open_read(path.string().c_str(), (in_ext == ".wav") ? NULL : &in_signal, NULL, NULL);
+		sox_format_t* out = sox_open_write("", &in->signal, &in->encoding, "null", NULL, NULL);
+		interm_signal = in->signal; /* NB: deep copy */
 
-			e = sox_create_effect(sox_find_effect("reverse"));
-			sox_effect_options(e, 0, NULL);
-			sox_add_effect(chain, e, &interm_signal, &out->signal);
-			free(e);
-		}
-		break;
-	}
-	case 2:
-	{
-		e = sox_create_effect(sox_find_effect("silence"));
-		args[0] = "1", args[1] = "0.1", args[2] = "1%", args[0] = "-1", args[1] = "0.1", args[2] = "1%", sox_effect_options(e, 3, args);
+		sox_effects_chain_t* chain = sox_create_effects_chain(&in->encoding, &out_encoding);
+		sox_effect_t* e = sox_create_effect(sox_find_effect("input"));
+		args[0] = (char *)in, sox_effect_options(e, 1, args);
 		sox_add_effect(chain, e, &interm_signal, &out->signal);
 		free(e);
-		break;
-	}
-	default:
-		break;
-	}
 
-
-	if (in->signal.rate != out->signal.rate)
-	{
-		e = sox_create_effect(sox_find_effect("rate"));
+		e = sox_create_effect(sox_find_effect("stats"));
 		sox_effect_options(e, 0, NULL);
 		sox_add_effect(chain, e, &interm_signal, &out->signal);
 		free(e);
+
+		e = sox_create_effect(sox_find_effect("output"));
+		args[0] = (char *)out, sox_effect_options(e, 1, args);
+		sox_add_effect(chain, e, &interm_signal, &out->signal);
+		free(e);
+
+		sox_flow_effects(chain, NULL, NULL);
+
+		char buf[512]{ 0 };
+		std::setvbuf(stderr, buf, _IOLBF, sizeof(buf));
+		sox_delete_effects_chain(chain);
+
+		std::stringstream ss(buf);
+		std::string to;
+		float pk_lev_dB(0.f);
+		if (buf != nullptr)
+		{
+			while (std::getline(ss, to, '\n'))
+			{
+				if (to.find("Pk lev dB") == 0)
+				{
+					to.replace(0, strlen("Pk lev dB"), "");
+					pk_lev_dB = std::stof(to);
+					break;
+				}
+			}
+		}
+
+		rms_pk_lev_dB += (pk_lev_dB * pk_lev_dB);
+
+		std::memset(buf, 0, 512);
+		std::setvbuf(stderr, buf, _IOLBF, sizeof(buf));
+		std::setvbuf(stderr, nullptr, _IONBF, 0);
+
+		sox_close(out);
+		sox_close(in);
+	}
+
+	rms_pk_lev_dB = std::sqrt(rms_pk_lev_dB / (double)input_files.size());
+	fprintf(stdout, "RMS Pk lev dB: %f\n", rms_pk_lev_dB);
+	return (float)rms_pk_lev_dB;
+}
+
+static void convert_to(const fs::path& in_path, const fs::path& out_path, const char* type, const char* trim, const char* pad, float gain)
+{
+	// find effect
+	static const sox_effect_handler_t* input_efh = sox_find_effect("input");
+	static const sox_effect_handler_t* output_efh = sox_find_effect("output");
+	static const sox_effect_handler_t* gain_efh = sox_find_effect("gain");
+	static const sox_effect_handler_t* silence_efh = sox_find_effect("silence");
+	static const sox_effect_handler_t* reverse_efh = sox_find_effect("reverse");
+	static const sox_effect_handler_t* rate_efh = sox_find_effect("rate");
+	static const sox_effect_handler_t* channels_efh = sox_find_effect("channels");
+	static const sox_effect_handler_t* pad_efh = sox_find_effect("pad");
+	static const auto safe_sox_close = [](sox_format_t* f) { if (f != nullptr) sox_close(f); };
+
+	auto in_ext = in_path.filename().extension();
+	sox_encodinginfo_t out_encoding =
+	{
+		SOX_ENCODING_SIGN2,
+		16,
+		std::numeric_limits<double>::infinity(),
+		sox_option_default,
+		sox_option_default,
+		sox_option_default,
+		sox_false
+	};
+
+	sox_signalinfo_t out_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
+	sox_signalinfo_t in_signal = { SAMPLE_RATE, 1, 16, 0, NULL };
+	sox_signalinfo_t interm_signal;
+
+	std::shared_ptr<sox_format_t> in = { sox_open_read(in_path.string().c_str(), (in_ext == ".wav") ? NULL : &in_signal, NULL, NULL), safe_sox_close };
+	std::shared_ptr<sox_format_t> out = { sox_open_write(out_path.string().c_str(), &out_signal, &out_encoding, type, NULL, NULL), safe_sox_close };
+	if (out.get() == nullptr) { std::cerr << "failed open out" << std::endl; return; }
+	interm_signal = in->signal; /* NB: deep copy */
+
+	std::shared_ptr<sox_effects_chain_t> chain = { sox_create_effects_chain(&in->encoding, &out->encoding), sox_delete_effects_chain };
+	std::shared_ptr<sox_effect_t> e;
+	{
+		e = { sox_create_effect(input_efh), free };
+		const char* args[]{ (const char*)in.get() };
+		sox_effect_options(e.get(), 1, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &in->signal);
+	}
+
+	if (in->signal.rate != out->signal.rate)
+	{
+		e = { sox_create_effect(rate_efh), free };
+		sox_effect_options(e.get(), 0, NULL);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
 	}
 
 	if (in->signal.channels != out->signal.channels)
 	{
-		e = sox_create_effect(sox_find_effect("channels"));
-		sox_effect_options(e, 0, NULL);
-		sox_add_effect(chain, e, &interm_signal, &out->signal);
-		free(e);
+		e = { sox_create_effect(channels_efh), free };
+		sox_effect_options(e.get(), 0, NULL);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
 	}
 
-	e = sox_create_effect(sox_find_effect("output"));
-	args[0] = (char *)out, sox_effect_options(e, 1, args);
-	sox_add_effect(chain, e, &interm_signal, &out->signal);
-	free(e);
+	if (gain != 0.0f)
+	{
+		std::string option = std::to_string(gain);
+		e = { sox_create_effect(gain_efh), free };
+		const char* args[]{ option.c_str() };
+		sox_effect_options(e.get(), 1, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+	}
 
-	sox_flow_effects(chain, NULL, NULL);
+	// https://digitalcardboard.com/blog/2009/08/25/the-sox-of-silence/comment-page-2/
+	// Trimming all (silence 1 0.1 1% -1 0.1 1%)
+	// Trimming begin (silence 1 0.1 1%)
+	// [-l] above-periods [duration threshold[d|%] [below-periods duration threshold[d|%]]
+	if (trim != nullptr && std::strlen(trim) > 0)
+	{
+		std::stringstream ss(trim);
+		std::vector<std::string> tokens{ "2", "1%", "1%" };
+		for (int i = 0; i < 3 && std::getline(ss, tokens[i], ':');)
+			if (!tokens[i].empty()) i++;
 
-	sox_delete_effects_chain(chain);
-	sox_close(out);
-	sox_close(in);
+		int silence = std::stoi(tokens[0]);
+		switch (silence)
+		{
+		case 1: // begin
+		{
+			e = { sox_create_effect(silence_efh), free };
+			const char* args[]{ "1", "0.1", tokens[1].c_str() };
+			sox_effect_options(e.get(), 3, (char**)args);
+			sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+			break;
+		}
+		case 2: // begin + end
+		{
+			for (int i = 1; i < 3; ++i)
+			{
+				e = { sox_create_effect(silence_efh), free };
+				const char* args[]{ "1", "0.1", tokens[i].c_str() };
+				sox_effect_options(e.get(), 3, (char**)args);
+				sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+
+				e = { sox_create_effect(reverse_efh), free };
+				sox_effect_options(e.get(), 0, NULL);
+				sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+			}
+			break;
+		}
+		case 3: // all
+		{
+			e = { sox_create_effect(silence_efh), free };
+			const char* args[]{ "1", "0.1", tokens[1].c_str(), "-1", "0.1", tokens[1].c_str() };
+			sox_effect_options(e.get(), 6, (char**)args);
+			sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	// pad
+	if (pad != nullptr && std::strlen(pad) > 0)
+	{
+		std::stringstream ss(pad);
+		std::vector<std::string> tokens{ "0", "0" };
+		for (int i = 0; i < 2 && std::getline(ss, tokens[i], ':');)
+			if (!tokens[i].empty()) i++;
+
+		e = { sox_create_effect(pad_efh), free };
+		const char* args[]{ tokens[0].c_str(), tokens[1].c_str() };
+		sox_effect_options(e.get(), 2, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+	}
+
+	{
+		e = { sox_create_effect(output_efh), free };
+		const char* args[]{ (const char*)out.get() };
+		sox_effect_options(e.get(), 1, (char**)args);
+		sox_add_effect(chain.get(), e.get(), &interm_signal, &out->signal);
+	}
+
+	sox_flow_effects(chain.get(), NULL, NULL);
 }
+
+void show_help(const cxxopts::Options& options, const char* message = nullptr)
+{
+	std::cout << options.help() << std::endl;
+	std::cout << "usage: ./dump_data -m train -i \"./*.wav or s16\" -o ./train" << std::endl;
+	std::cout << "usage: ./dump_data -m test -f <0 or 1> -i \"./train/*.wav or *.s16\" -o ./dump" << std::endl;
+	
+	if(message != nullptr)
+		std::cout << message << std::endl;
+}
+
+/*
+LPCNet acoustic feature
+features[:18] : 18-dim Bark scale cepstrum
+features[18:36] : Not used
+features[36:37] : pitch period
+features[37:38] : pitch correlation
+features[39:55] : LPC
+window_size (=n_fft) = 320 (20ms)
+frame_shift(=hop_size) = 160 (10ms)
+
+examples
+-m test -f 1 -t 2:0.5%:0.5% -p 0:0.01 -i ./tsuchiya/tsuchiya_angry/*.wav -o ./tsuchiya/tsuchiya_angry/dump
+-m test -f 1 -t 2:0.5%:0.5% -p 0:0.01 -i D:/Voice/basic5000/wav/*.wav -o D:/Voice/basic5000/dump
+*/
 
 int main(int argc, const char** argv) {
     int i;
@@ -254,6 +404,7 @@ int main(int argc, const char** argv) {
     float x[FRAME_SIZE];
     int gain_change_count = 0;
     FILE* f1;
+	FILE* fm;
     FILE* ffeat;
     FILE* fpcm = NULL;
     short pcm[FRAME_SIZE] = { 0 };
@@ -271,23 +422,31 @@ int main(int argc, const char** argv) {
     int encode = 0;
     int decode = 0;
     int quantize = 0;
-	int silence = 0;
+	int format = 0;
+	int normalize = 0;
+	int pcount = 0;
+	std::string input;
+	std::string output;
+	std::string mode;
+	std::string trim;
+	std::string pad;
 
-	// ./dump_data -test test_input.s16 test_features.f32
-	// ./dump_data -train input.s16 features.f32 data.u8
-	// ./dump_data -mode train -i input.s16 -o data.f32
-	// ./dump_data -mode test -i *.s16
-	// ./dump_data -m test -i input.s16 -o
 	cxxopts::Options options("dump_data", "LPCNet program");
 	options.add_options()
 		("i,input", "input data or path is PCM without header", cxxopts::value<std::string>())
 		("o,out", "output path", cxxopts::value<std::string>())
 		("m,mode", "train or test or qtrain or qtest", cxxopts::value<std::string>())
-		("t,type", "The processing method is designated as <empty> or 'tacotron2'", cxxopts::value<std::string>()->default_value("none"))
-		("s,silent", "Silent section trim, '1' is begin and end, '2' is all", cxxopts::value<int>()->default_value("0"))
+		("f,format", "If '1', the output format is 'bark bands[18] + pitch period[19] and correlation[20]'", cxxopts::value<int>()->default_value("0"))
+		("t,trim", "'WAV' file silent section trimming, '1' is begin, 2 is begin and end, '2' is all and threshold[:d%]", cxxopts::value<std::string>()->default_value("1:1%")) // best 2:0.5%:0.5%
+		("p,pad", "'WAV' file padding '0:1.5' is add 0 and 1.5 seconds to the begin and end", cxxopts::value<std::string>()->default_value("0:0")) // best 0:0.01 (10ms)
+		("n,norm", "normalize '1' is enable", cxxopts::value<int>()->default_value("0"))
 		;
 
-	std::string input, output, mode, type = "none";
+	if (argc < 2)
+	{
+		show_help(options);
+		exit(0);
+	}
 
 	try
 	{
@@ -319,91 +478,111 @@ int main(int argc, const char** argv) {
 			decode = 1;
 		}
 
-		silence = result["s"].as<int>();
+		trim = result["t"].as<std::string>();
+		pad = result["p"].as<std::string>();
 
 		if (result.count("i") == 0)
-			throw std::exception("no input arg");
-		
+		{
+			show_help(options, "no input arg");
+			exit(0);
+		}
+
 		if (result.count("o") == 0)
-			throw std::exception("no ouput arg");
+		{
+			show_help(options, "no ouput arg");
+			exit(0);
+		}
 
 		input = result["i"].as<std::string>();
 		output = result["o"].as<std::string>();
-		type = result["t"].as<std::string>();
+		format = result["f"].as<int>();
+		normalize = result["n"].as<int>();
 
 		if (result.count("help"))
-			throw std::exception("help");
+		{
+			show_help(options);
+			exit(0);
+		}
 	}
 	catch (const std::exception& ex)
 	{
-		std::cout << options.help() << std::endl;
-		std::cout << ex.what() << std::endl;
-		std::cout << "usage: ./dump_data --mode train -i ./*.wav or s16 -o ./train" << std::endl;
-		std::cout << "usage: ./dump_data --mode test -i ./train/*.s16 -o ./feats" << std::endl;
+		show_help(options, ex.what());
 		exit(0);
 	}
 
-	fprintf(stdout, "Mode: %s, Type: %s\n", mode.c_str(), type.c_str());
+	fprintf(stdout, "Mode: %s \n", mode.c_str());
+	switch (format)
+	{
+	case 1:
+		fprintf(stdout, "the output format is 'bark bands[18] + pitch period[19] and correlation[20]'\n");
+		break;
+	default:
+		break;
+	}
 
-    st = lpcnet_encoder_create();
+	st = lpcnet_encoder_create();
 	sox_init();
 
 	fs::path input_path(input);
 	fs::path output_path(output);
+	fs::path output_path_feats(output);
+	fs::path output_path_pcm(output);
+
 	cppglob::glob_iterator it = cppglob::iglob(input_path), end;
 	std::list<fs::path> input_files(it, end);
 	fs::create_directories(output_path);
+
+	if (!training)
+	{
+		output_path_feats.append("feats");
+		fs::create_directories(output_path_feats);
+
+		output_path_pcm.append("pcm");
+		if (!input_files.empty() && input_files.front().extension() == ".wav")
+			fs::create_directories(output_path_pcm);
+	}
 	
+	float gain = normalize ? get_normalize_gain(input_files) : 0.0f;
+
 	if (training)
 	{
 		// create training merged data
-		if (input_files.size() > 1)
-		{
-			auto parent = input_path.parent_path();
-			if (parent.string() == "" || parent.string() == ".")
-				parent = fs::current_path();
+		auto parent = input_path.parent_path();
+		if (parent.string() == "" || parent.string() == ".")
+			parent = fs::current_path();
 
-			auto parent_path =  parent.string();
-			auto parent_name = parent.filename().string();
+		auto parent_path = parent.string();
+		auto parent_name = parent.filename().string();
 
-			fs::path merge = output_path;
-			merge.append(parent_name + ".s16.merge");
+		fs::path merge = output_path;
+		merge.append(parent_name + ".s16.merge");
 
-			f1 = fopen(merge.string().c_str(), "wb");
-			if (f1) {
-				for (auto& file : input_files)
-				{
-					fs::path out = output_path;
-					out.append(file.filename().string());
-
-					if (file.extension() == ".wav")
-					{
-						out.replace_extension(".s16");
-						convert_to(file, out, "sw", silence);			// remove header and resampling
-					}
-
-					fprintf(stdout, "Merge: %s\n", out.string().c_str());
-					FILE* to = fopen(out.string().c_str(), "rb");
-					assert(to);
-					if (to) {
-						copy(to, f1);
-						fclose(to);
-					}
-				}
-				fclose(f1);
-				input_path = merge;
-			}
-		}
-		else
-		{
-			if (input_path.extension() == ".wav")
+		fm = fopen(merge.string().c_str(), "wb");
+		if (fm) {
+			for (auto& file : input_files)
 			{
 				fs::path out = output_path;
-				out.append(input_path.filename().string());
-				out.replace_extension(".s16");
-				convert_to(input_path, out);		// remove header and resampling
-				input_path = out;
+				out.append(file.filename().string());
+
+				auto in_ext = file.filename().extension();
+				if (in_ext == ".wav")
+				{
+					out.replace_extension(".s16");
+
+					fprintf(stdout, "Convert: %s\r", file.string().c_str());
+					fflush(stdout);
+					convert_to(file, out, "sw", trim.c_str(), pad.c_str(), gain);
+				}
+
+				FILE* to = fopen(out.string().c_str(), "rb");
+				assert(to);
+				if (to) {
+					copy(to, fm);
+					fclose(to);
+				}
 			}
+			fclose(fm);
+			input_path = merge;
 		}
 
 		input_files.clear();
@@ -413,22 +592,38 @@ int main(int argc, const char** argv) {
 	for (auto& input_file : input_files)
 	{
 		lpcnet_encoder_init(st);
-		if (type == "t2")
-			st->type = 1;
+		count = 0;
+		pcount = 0;
+
+		fprintf(stdout, "Process file: %ws\r", input_file.c_str());
+		fflush(stdout);
+
+		auto in_ext = input_file.extension();
+		if (in_ext == ".wav")
+		{
+			fs::path pcm_path = output_path_pcm;
+			pcm_path.append(input_file.filename().string());
+			pcm_path.replace_extension(".s16");
+
+			fprintf(stdout, "\nConvert: %s\r\b\r", input_file.string().c_str());
+			fflush(stdout);
+			convert_to(input_file, pcm_path, "sw", trim.c_str(), pad.c_str(), gain);
+			input_file = pcm_path;
+		}
 
 		f1 = fopen(input_file.string().c_str(), "rb");
 		if (f1 == NULL) {
-			fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", argv[2]);
+			fprintf(stderr, "Error opening input .s16 16kHz speech input file: %s\n", input_file.string().c_str());
 			exit(1);
 		}
 		
-		fs::path ffeat_path = output_path;
+		fs::path ffeat_path = output_path_feats;
 		ffeat_path.append(input_file.filename().string());
 		ffeat_path.replace_extension(".f32");
 
 		ffeat = fopen(ffeat_path.string().c_str(), "wb");
 		if (ffeat == NULL) {
-			fprintf(stderr, "Error opening output feature file: %s\n", argv[3]);
+			fprintf(stderr, "Error opening output feature file: %s\n", ffeat_path.string().c_str());
 			exit(1);
 		}
 
@@ -455,10 +650,11 @@ int main(int argc, const char** argv) {
 			pcm_path.replace_extension(".u8");
 			fpcm = fopen(pcm_path.string().c_str(), "wb");
 			if (fpcm == NULL) {
-				fprintf(stderr, "Error opening output PCM file: %s\n", argv[4]);
+				fprintf(stderr, "Error opening output PCM file: %s\n", pcm_path.string().c_str());
 				exit(1);
 			}
 		}
+
 		while (1) {
 			float E = 0;
 			int silent;
@@ -512,29 +708,31 @@ int main(int argc, const char** argv) {
 			/* PCM is delayed by 1/2 frame to make the features centered on the frames. */
 			for (i = 0; i < FRAME_SIZE - TRAINING_OFFSET; i++) pcm[i + TRAINING_OFFSET] = float2short(x[i]);
 			compute_frame_features(st, x);
-
-			RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
+			
 			if (fpcm) {
+				RNN_COPY(&pcmbuf[st->pcount * FRAME_SIZE], pcm, FRAME_SIZE);
 				compute_noise(&noisebuf[st->pcount * FRAME_SIZE], noise_std);
 			}
-			st->pcount++;
+			
 			/* Running on groups of 4 frames. */
-			if (st->pcount == 4) {
+			if (++st->pcount == 4) {
 				unsigned char buf[8];
-				process_superframe(st, buf, ffeat, encode, quantize);
+				process_superframe(st, buf, ffeat, encode, quantize, format);
 				if (fpcm) write_audio(st, pcmbuf, noisebuf, fpcm);
+				pcount += st->pcount;
 				st->pcount = 0;
 			}
+
 			//if (fpcm) fwrite(pcm, sizeof(short), FRAME_SIZE, fpcm);
 			for (i = 0; i < TRAINING_OFFSET; i++) pcm[i] = float2short(x[i + FRAME_SIZE - TRAINING_OFFSET]);
 			old_speech_gain = speech_gain;
 			count++;
 		}
+		if (fpcm) fclose(fpcm);
 		fclose(f1);
 		fclose(ffeat);
-		if (fpcm) fclose(fpcm);
 	}
-    lpcnet_encoder_destroy(st);
+	lpcnet_encoder_destroy(st);
 	sox_quit();
-    return 0;
+	return 0;
 }
