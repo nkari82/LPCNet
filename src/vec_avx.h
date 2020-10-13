@@ -322,13 +322,13 @@ static void (*sparse_sgemv_accum16)(float*, const float*, int, const int*, const
 
 
 #if defined(_MSC_VER)
-#pragma section(".CRT$XIU",long,read)
+#pragma section(".CRT$XIA",long,read)
 void vec_avx_init()
 #else
 __attribute__((constructor)) void vec_avx_init()
 #endif
 {
-	int registers[4];
+	int registers[4] = {0};
 	__cpuid(registers, 0);
 
 	// avx2
@@ -344,6 +344,6 @@ __attribute__((constructor)) void vec_avx_init()
 	}
 }
 #if defined(_MSC_VER)
-__declspec(allocate(".CRT$XIU"))
+__declspec(allocate(".CRT$XIA"))
 void (*vec_avx_initializer)() = vec_avx_init;
 #endif

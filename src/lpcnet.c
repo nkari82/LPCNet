@@ -122,7 +122,7 @@ LPCNET_EXPORT void lpcnet_destroy(LPCNetState *lpcnet)
     free(lpcnet);
 }
 
-LPCNET_EXPORT void lpcnet_synthesize(LPCNetState *lpcnet, const float *features, short *output, int N)
+LPCNET_EXPORT int lpcnet_synthesize(LPCNetState *lpcnet, const float *features, short *output, int N)
 {
 	NNetState* net;
 	NNetModel* model;
@@ -135,7 +135,7 @@ LPCNET_EXPORT void lpcnet_synthesize(LPCNetState *lpcnet, const float *features,
     float pitch_gain;
 	net = &lpcnet->nnet;
 	model = lpcnet->model;
-	if (!model) return;
+	if (!model) return -1;
     /* Matches the Python code -- the 0.1 avoids rounding issues. */
     pitch = (int)floor(.1 + 50*features[36]+100);
     pitch_gain = lpcnet->old_gain[FEATURES_DELAY-1];
@@ -148,7 +148,7 @@ LPCNET_EXPORT void lpcnet_synthesize(LPCNetState *lpcnet, const float *features,
     if (lpcnet->frame_count <= FEATURES_DELAY)
     {
         RNN_CLEAR(output, N);
-        return;
+        return 1;
     }
     for (i=0;i<N;i++)
     {
@@ -173,6 +173,7 @@ LPCNET_EXPORT void lpcnet_synthesize(LPCNetState *lpcnet, const float *features,
         if (pcm>32767) pcm = 32767;
         output[i] = (int)floor(.5 + pcm);
     }
+    return 0;
 }
 
 
@@ -250,6 +251,7 @@ LPCNET_EXPORT int lpcnet_load(LPCNetState *lpcnet, const char* path)
 	fread(&model->sparse_gru_a.nb_neurons, sizeof(int), 1, file);
 	fread(&model->sparse_gru_a.activation, sizeof(int), 1, file);
 	fread(&model->sparse_gru_a.reset_after, sizeof(int), 1, file);
+    lpcnet->model = model;
 	return 0;
 }
 

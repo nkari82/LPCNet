@@ -169,7 +169,7 @@ LPCNET_EXPORT void lpcnet_destroy(LPCNetState *st);
   * @param [in] N <tt>int</tt>: Number of samples to generate
   * @retval 0 Success
   */
-LPCNET_EXPORT void lpcnet_synthesize(LPCNetState *st, const float *features, short *output, int N);
+LPCNET_EXPORT int lpcnet_synthesize(LPCNetState *st, const float *features, short *output, int N);
 
 /**
 */
