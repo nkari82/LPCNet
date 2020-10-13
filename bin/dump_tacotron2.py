@@ -58,10 +58,6 @@ class Config(object):
         self.save_interval_steps = 2000             
         self.eval_interval_steps = 500               
         self.log_interval_steps = 200                
-        self.start_schedule_teacher_forcing = 200001
-        self.start_ratio_value = 0.5               
-        self.schedule_decay_steps = 50000     
-        self.end_ratio_value = 0.0
         self.num_save_intermediate_results = 1
         
         self.outdir = outdir

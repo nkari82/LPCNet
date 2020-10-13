@@ -9,28 +9,29 @@ from tensorflow_tts.models import TFFastSpeech2
 
 sys.path.append(".")
 
-SelfAttentionParams = collections.namedtuple(
-    "SelfAttentionParams",
-    [
-        "n_speakers",
-        "hidden_size",
-        "num_hidden_layers",
-        "num_attention_heads",
-        "attention_head_size",
-        "intermediate_size",
-        "intermediate_kernel_size",
-        "hidden_act",
-        "output_attentions",
-        "output_hidden_states",
-        "initializer_range",
-        "hidden_dropout_prob",
-        "attention_probs_dropout_prob",
-        "layer_norm_eps",
-        "max_position_embeddings",
-    ],
-)
-
 class Config(object):
+
+    SelfAttentionParams = collections.namedtuple(
+        "SelfAttentionParams",
+        [
+            "n_speakers",
+            "hidden_size",
+            "num_hidden_layers",
+            "num_attention_heads",
+            "attention_head_size",
+            "intermediate_size",
+            "intermediate_kernel_size",
+            "hidden_act",
+            "output_attentions",
+            "output_hidden_states",
+            "initializer_range",
+            "hidden_dropout_prob",
+            "attention_probs_dropout_prob",
+            "layer_norm_eps",
+            "max_position_embeddings",
+        ],
+    )
+    
     def __init__(self,outdir,vocab_size=150,n_speakers=1):
         # fastspeech2 params
         self.vocab_size = vocab_size
@@ -115,7 +116,6 @@ class Config(object):
         self.batch_size = 32
         self.test_size = 0.05
         self.mel_length_threshold = 0
-        self.guided_attention = 0.2
         
         # optimizer
         self.initial_learning_rate = 0.001
@@ -128,11 +128,7 @@ class Config(object):
         self.train_max_steps = 200000              
         self.save_interval_steps = 2000             
         self.eval_interval_steps = 500               
-        self.log_interval_steps = 200                
-        self.start_schedule_teacher_forcing = 200001
-        self.start_ratio_value = 0.5               
-        self.schedule_decay_steps = 50000     
-        self.end_ratio_value = 0.0
+        self.log_interval_steps = 200
         self.num_save_intermediate_results = 1
         
         self.outdir = outdir
@@ -153,6 +149,7 @@ def main():
     parser = argparse.ArgumentParser(description="Dump FastSpeech2")
     parser.add_argument("--outdir", default="./", type=str, help="directory to save pb or tflite file.")
     parser.add_argument("--checkpoint", type=str, required=True, help="checkpoint file to be loaded.")
+    parser.add_argument("--vocab_size", type=int, required=True, help="vocab size")
     parser.add_argument("--tflite", type=bool, default=False,  help="saved model to tflite")
     args = parser.parse_args()
     
@@ -164,7 +161,7 @@ def main():
         args.checkpoint = tf.train.latest_checkpoint(args.checkpoint)
     
     save_name = os.path.splitext(os.path.basename(args.checkpoint))[0]
-    config = Config(args.outdir)
+    config = Config(args.outdir, args.vocab_size)
     
     # define model.
     fastspeech2 = TFFastSpeech2(config=config, name="fastspeech2", enable_tflite_convertible=args.tflite)
