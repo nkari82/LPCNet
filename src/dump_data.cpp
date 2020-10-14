@@ -389,6 +389,7 @@ frame_shift(=hop_size) = 160 (10ms)
 examples
 -m test -f 1 -t 2:0.5%:0.5% -p 0:0.01 -i ./tsuchiya/tsuchiya_angry/*.wav -o ./tsuchiya/tsuchiya_angry/dump
 -m test -f 1 -t 2:0.5%:0.5% -p 0:0.01 -i D:/Voice/basic5000/wav/*.wav -o D:/Voice/basic5000/dump
+-m train -i D:/Github/LPCNet/bin/datasets/jsut/basic/pcm/*.s16 -o D:/Voice/basic5000/train
 */
 
 int main(int argc, const char** argv) {
@@ -561,20 +562,23 @@ int main(int argc, const char** argv) {
 		if (fm) {
 			for (auto& file : input_files)
 			{
-				fs::path out = output_path;
-				out.append(file.filename().string());
-
+				FILE* to(nullptr);
 				auto in_ext = file.filename().extension();
 				if (in_ext == ".wav")
 				{
+					fs::path out = output_path;
+					out.append(file.filename().string());
 					out.replace_extension(".s16");
 
 					fprintf(stdout, "Convert: %s\r", file.string().c_str());
 					fflush(stdout);
 					convert_to(file, out, "sw", trim.c_str(), pad.c_str(), gain);
+					to = fopen(out.string().c_str(), "rb");
 				}
-
-				FILE* to = fopen(out.string().c_str(), "rb");
+				else
+				{
+					to = fopen(file.string().c_str(), "rb");
+				}
 				assert(to);
 				if (to) {
 					copy(to, fm);

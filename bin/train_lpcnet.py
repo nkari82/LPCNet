@@ -30,6 +30,7 @@
 import lpcnet
 import sys
 import os
+import argparse
 import numpy as np
 import datetime
 import tensorflow as tf
@@ -38,6 +39,8 @@ import h5py
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint
 from ulaw import ulaw2lin, lin2ulaw
+
+sys.path.append(".")
 
 gpus = tf.config.experimental.list_physical_devices('GPU')
 print("Num GPUs Available: ", len(gpus))
@@ -53,18 +56,31 @@ if gpus:
   except RuntimeError as e:
     print(e)
 
-nb_epochs = 140
+#python .\train_lpcnet.py --feature ./train/pcm.s16.f32 --pcm ./train/pcm.s16.u8 --batch-size 1
+parser = argparse.ArgumentParser(description="Train LPCNet")
+parser.add_argument("--feature", type=str, required=True, help="feature file")
+parser.add_argument("--pcm", type=str, required=True, help="pcm file")
+parser.add_argument("--batch-size", default=12, type=int, help="batch size.")
+parser.add_argument("--epoch", default=120, type=int, help="epoch")
+parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint file path to resume training. (default="")')
+parser.add_argument("--pretrained",default="",type=str,nargs="?",help='pretrained weights .h5 file to load weights from. Auto-skips non-matching layers',)
+args = parser.parse_args()
+
+if args.resume is not None and os.path.isdir(args.resume):
+    args.resume = tf.train.latest_checkpoint(args.resume)
+        
+nb_epochs = args.epoch
 
 # Try reducing batch_size if you run out of memory on your GPU
-batch_size = 64
+batch_size = args.batch_size
 
 model, _, _ = lpcnet.new_lpcnet_model(training=True)
 
 model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['sparse_categorical_accuracy'])
 model.summary()
 
-feature_file = sys.argv[1]
-pcm_file = sys.argv[2]     # 16 bit unsigned short PCM samples
+feature_file = args.feature
+pcm_file = args.pcm     # 16 bit unsigned short PCM samples
 frame_size = model.frame_size
 nb_features = 55
 nb_used_features = model.nb_used_features
@@ -72,7 +88,6 @@ feature_chunk_size = 15
 pcm_chunk_size = frame_size*feature_chunk_size
 
 # u for unquantised, load 16 bit PCM samples and convert to mu-law
-
 data = np.fromfile(pcm_file, dtype='uint8')
 nb_frames = len(data)//(4*pcm_chunk_size)
 
@@ -100,7 +115,6 @@ fpad1 = np.concatenate([features[0:1, 0:2, :], features[:-1, -2:, :]], axis=0)
 fpad2 = np.concatenate([features[1:, :2, :], features[0:1, -2:, :]], axis=0)
 features = np.concatenate([fpad1, features, fpad2], axis=1)
 
-
 periods = (.1 + 50*features[:,:,36:37]+100).astype('int16')
 
 in_data = np.concatenate([sig, pred, in_exc], axis=-1)
@@ -115,26 +129,26 @@ tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram
 checkpoint_path = "training/lpcnet30_384_10_G16_{epoch:02d}.ckpt"
 checkpoint_dir = os.path.dirname(checkpoint_path)
 
-
 # dump models to disk as we go
 checkpoint = ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, verbose=1)
 
 #Training from scratch
 initial_epoch = 0
 
-latest = tf.train.latest_checkpoint(checkpoint_dir)
-if latest is not None:
-    model.load_weights(latest)
+if args.pretrained is not None and args.pretrained != "":
+    model.load_weights(args.pretrained)
     sparsify = lpcnet.Sparsify(0, 0, 1, (0.05, 0.05, 0.2))
     lr = 0.0001
     decay = 0
-    initial_epoch = int(latest.split('_')[-1].replace('.ckpt',''))
-    loss, acc = model.evaluate([in_data, features, periods], verbose=2)
-    print("Restored model: {}, initial epoch: {}, accuracy: {:5.2f}%".format(latest, initial_epoch, 100*acc))
 else:
-    sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
+    latest = args.resume
+    if latest is not None and latest != "":
+        model.load_weights(latest)
+        initial_epoch = int(latest.split('_')[-1].replace('.ckpt',''))
+
     lr = 0.001
     decay = 5e-5
+    sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
 
 model.compile(optimizer=Adam(lr, amsgrad=True, decay=decay), loss='sparse_categorical_crossentropy')
 model.save_weights(checkpoint_path.format(epoch=0))
