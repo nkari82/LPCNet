@@ -322,8 +322,9 @@ static void (*sparse_sgemv_accum16)(float*, const float*, int, const int*, const
 
 
 #if defined(_MSC_VER)
-#pragma section(".CRT$XIA",long,read)
-void vec_avx_init()
+#pragma section(".CRT$XIZ",long,read)
+#pragma section(".CRT$XCZ",long,read)
+static void vec_avx_init()
 #else
 __attribute__((constructor)) void vec_avx_init()
 #endif
@@ -343,7 +344,8 @@ __attribute__((constructor)) void vec_avx_init()
 		sparse_sgemv_accum16 = sparse_sgemv_accum16_avx2;
 	}
 }
+
 #if defined(_MSC_VER)
-__declspec(allocate(".CRT$XIA"))
-void (*vec_avx_initializer)() = vec_avx_init;
+__declspec(allocate(".CRT$XIZ")) void (*vec_avx_initializer_c)() = vec_avx_init;
+__declspec(allocate(".CRT$XCZ")) void (*vec_avx_initializer_cpp)() = vec_avx_init;
 #endif
