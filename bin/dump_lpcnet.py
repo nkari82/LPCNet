@@ -54,7 +54,7 @@ Activations = {
     }
 
 def printVector(f, vector, name, dtype='float32'):
-    print(name)
+    print("name: {}, len: {}".format(name, len(vector)))
     v = np.reshape(vector, (-1))
     v = v.astype(dtype)
     f.write(struct.pack('I', len(v)))
