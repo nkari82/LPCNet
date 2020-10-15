@@ -26,13 +26,8 @@
 '''
 
 import math
-# from keras.models import Model
-# from keras.layers import Input, GRU, CuDNNGRU, Dense, Embedding, Reshape, Concatenate, Lambda, Conv1D, Multiply, Add, Bidirectional, MaxPooling1D, Activation
-# from keras import backend as K
-# from keras.initializers import Initializer
-# from keras.callbacks import Callback
-
-# tensorflow v2
+import h5py
+import sys
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.compat.v1.keras.layers import CuDNNGRU
@@ -40,11 +35,8 @@ from tensorflow.keras.layers import Input, GRU, Dense, Embedding, Reshape, Conca
 from tensorflow.keras import backend as K
 from tensorflow.keras.initializers import Initializer
 from tensorflow.keras.callbacks import Callback
-
 from mdense import MDense
 import numpy as np
-import h5py
-import sys
 
 frame_size = 160
 pcm_bits = 8
@@ -83,7 +75,7 @@ class Sparsify(Callback):
                     density = 1 - (1-self.final_density[k])*(1 - r*r*r)
                 A = p[:, k*N:(k+1)*N]
                 A = A - np.diag(np.diag(A))
-                A = np.transpose(A, (1, 0))
+                #A = np.transpose(A, (1, 0))
                 L=np.reshape(A, (N, N//16, 16))
                 S=np.sum(L*L, axis=-1)
                 SS=np.sort(np.reshape(S, (-1,)))
@@ -91,7 +83,7 @@ class Sparsify(Callback):
                 mask = (S>=thresh).astype('float32');
                 mask = np.repeat(mask, 16, axis=1)
                 mask = np.minimum(1, mask + np.diag(np.ones((N,))))
-                mask = np.transpose(mask, (1, 0))
+                #mask = np.transpose(mask, (1, 0))
                 p[:, k*N:(k+1)*N] = p[:, k*N:(k+1)*N]*mask
                 #print(thresh, np.mean(mask))
             w[1] = p

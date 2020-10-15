@@ -66,9 +66,6 @@ parser.add_argument("--resume",default="",type=str,nargs="?",help='checkpoint fi
 parser.add_argument("--pretrained",default="",type=str,nargs="?",help='pretrained weights .h5 file to load weights from. Auto-skips non-matching layers',)
 args = parser.parse_args()
 
-if args.resume is not None and os.path.isdir(args.resume):
-    args.resume = tf.train.latest_checkpoint(args.resume)
-        
 nb_epochs = args.epoch
 
 # Try reducing batch_size if you run out of memory on your GPU
@@ -126,30 +123,35 @@ del in_exc
 log_dir = "logs/fit/" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
-checkpoint_path = "training/lpcnet30_384_10_G16_{epoch:02d}.ckpt"
+checkpoint = "lpcnet30_384_10_G16"
+checkpoint_path = os.path.join("training", checkpoint + "_{epoch:02d}.h5")
 checkpoint_dir = os.path.dirname(checkpoint_path)
+
+if args.resume is not None and os.path.isdir(args.resume):
+    checkpoint_list = glob.iglob(os.path.join(args.resume, checkpoint + "_*.h5", recursive=False)
+    args.resume = max(checkpoint_list, key=os.path.getctime)
 
 # dump models to disk as we go
 checkpoint = ModelCheckpoint(filepath=checkpoint_path, save_weights_only=True, verbose=1)
-
-#Training from scratch
 initial_epoch = 0
 
 if args.pretrained is not None and args.pretrained != "":
+    #Adapting from an existing model
     model.load_weights(args.pretrained)
     sparsify = lpcnet.Sparsify(0, 0, 1, (0.05, 0.05, 0.2))
     lr = 0.0001
     decay = 0
 else:
+    #Training from scratch
     latest = args.resume
     if latest is not None and latest != "":
         model.load_weights(latest)
-        initial_epoch = int(latest.split('_')[-1].replace('.ckpt',''))
+        initial_epoch = int(latest.split('_')[-1].replace('.h5',''))
 
     lr = 0.001
     decay = 5e-5
     sparsify = lpcnet.Sparsify(2000, 40000, 400, (0.05, 0.05, 0.2))
 
-model.compile(optimizer=Adam(lr, amsgrad=True, decay=decay), loss='sparse_categorical_crossentropy')
+model.compile(optimizer=Adam(lr, amsgrad=True, decay=decay, beta_2=0.99), loss='sparse_categorical_crossentropy')
 model.save_weights(checkpoint_path.format(epoch=0))
 model.fit([in_data, features, periods], out_exc, batch_size=batch_size, initial_epoch=initial_epoch, epochs=nb_epochs, validation_split=0.0, callbacks=[checkpoint, sparsify, tensorboard_callback])
