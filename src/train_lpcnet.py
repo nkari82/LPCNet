@@ -89,7 +89,7 @@ in_exc = np.reshape(data[2::4], (nb_frames, pcm_chunk_size, 1))
 out_exc = np.reshape(data[3::4], (nb_frames, pcm_chunk_size, 1))
 del data
 
-print("ulaw std = ", np.std(out_exc))
+print("ulaw std = ", np.std(out_exc, dtype='float32')))
 
 features = np.reshape(features, (nb_frames, feature_chunk_size, nb_features))
 features = features[:, :, :nb_used_features]
