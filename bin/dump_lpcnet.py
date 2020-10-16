@@ -29,29 +29,27 @@ import lpcnet
 import sys
 import struct
 import numpy as np
-
+import h5py
+import re
+import tensorflow.keras.backend as K
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.compat.v1.keras.layers import CuDNNGRU
 from tensorflow.keras.layers import Layer, GRU, Dense, Conv1D, Embedding
-import tensorflow.keras.backend as K
-
 from ulaw import ulaw2lin, lin2ulaw
 from mdense import MDense
-import h5py
-import re
 
 max_rnn_neurons = 1
 max_conv_inputs = 1
 max_mdense_tmp = 1
   
 Activations = {
-    'LINEAR':0,
-    'SIGMOID':1,
-    'TANH':2,
-    'RELU':3,
-    'SOFTMAX':4
-    }
+'LINEAR':0,
+'SIGMOID':1,
+'TANH':2,
+'RELU':3,
+'SOFTMAX':4
+}
 
 def printVector(f, vector, name, dtype='float32'):
     print("name: {}, len: {}".format(name, len(vector)))
@@ -85,7 +83,6 @@ def printSparseVector(f, A, name):
 
 def dump_layer_ignore(self, f):
     print("ignoring layer " + self.name + " of type " + self.__class__.__name__)
-    return False
 Layer.dump_layer = dump_layer_ignore
 
 def dump_sparse_gru(self, f):
@@ -95,8 +92,6 @@ def dump_sparse_gru(self, f):
     
     weights = self.get_weights()
     printSparseVector(f, weights[1], name + '_recurrent_weights')
-    
-    v = np.reshape(weights, (-1))
     printVector(f, weights[-1], name + '_bias')
     if hasattr(self, 'activation'):
         activation = self.activation.__name__.upper()
@@ -109,7 +104,6 @@ def dump_sparse_gru(self, f):
     neurons = weights[0].shape[1]//3
     max_rnn_neurons = max(max_rnn_neurons, neurons)      
     f.write(struct.pack('iii', weights[0].shape[1]//3, Activations[activation], reset_after))
-    return True
 
 def dump_gru_layer(self, f):
     global max_rnn_neurons
@@ -130,7 +124,6 @@ def dump_gru_layer(self, f):
     neurons = weights[0].shape[1]//3
     max_rnn_neurons = max(max_rnn_neurons, neurons)
     f.write(struct.pack('iiii', weights[0].shape[0], weights[0].shape[1]//3, Activations[activation], reset_after))
-    return True
 CuDNNGRU.dump_layer = dump_gru_layer
 GRU.dump_layer = dump_gru_layer
 
@@ -145,8 +138,6 @@ def dump_dense_layer(self, f):
     weights = self.get_weights()
     activation = self.activation.__name__.upper()
     dump_dense_layer_impl(name, weights[0], weights[1], activation, f)
-    return False
-
 Dense.dump_layer = dump_dense_layer
 
 def dump_mdense_layer(self, f):
@@ -160,7 +151,6 @@ def dump_mdense_layer(self, f):
     activation = self.activation.__name__.upper()
     max_mdense_tmp = max(max_mdense_tmp, weights[0].shape[0]*weights[0].shape[2])
     f.write(struct.pack('iiii', weights[0].shape[1], weights[0].shape[0], weights[0].shape[2], Activations[activation]))
-    return False
 MDense.dump_layer = dump_mdense_layer
 
 def dump_conv1d_layer(self, f):
@@ -173,9 +163,7 @@ def dump_conv1d_layer(self, f):
     activation = self.activation.__name__.upper()
     max_conv_inputs = max(max_conv_inputs, weights[0].shape[1]*weights[0].shape[0])
     f.write(struct.pack('iiii', weights[0].shape[1], weights[0].shape[0], weights[0].shape[2], Activations[activation]))
-    return True
 Conv1D.dump_layer = dump_conv1d_layer
-
 
 def dump_embedding_layer_impl(name, weights, f):
     printVector(f, weights, name + '_weights')
@@ -186,7 +174,6 @@ def dump_embedding_layer(self, f):
     print("printing layer " + name + " of type " + self.__class__.__name__)
     weights = self.get_weights()[0]
     dump_embedding_layer_impl(name, weights, f)
-    return False
 Embedding.dump_layer = dump_embedding_layer
 
 model, _, _ = lpcnet.new_lpcnet_model(rnn_units1=384, use_gpu=False)
@@ -210,10 +197,8 @@ W = model.get_layer('gru_a').get_weights()[0][3*embed_size:,:]
 b = model.get_layer('gru_a').get_weights()[2]
 dump_dense_layer_impl('gru_a_dense_feature', W, b, 'LINEAR', bf)
 
-layer_list = []
 for i, layer in enumerate(model.layers):
-    if layer.dump_layer(bf):
-       layer_list.append(layer.name)
+    layer.dump_layer(bf)
 
 dump_sparse_gru(model.get_layer('gru_a'), bf)
 
