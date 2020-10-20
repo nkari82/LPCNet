@@ -11,7 +11,7 @@ import numpy as np
 
 _pad = "pad"
 _eos = "eos"
-_punctuation = ["-","ー","、","。","！","？","!","?"]
+_punctuation = ["-",",","、","。","！","？","!","?"]
 _cleaner = [" ","　","「","」","『","』","・","【","】","（","）","(", ")"]
 _letters = [chr(_) for _ in range(0x30A0, 0x30FF)]  # katakana
 _numbers = "0123456789"
@@ -45,6 +45,7 @@ class JSpeechProcessor(object):
     def __init__(self, rootdir, **kwargs):  
         self._tagger = MeCab.Tagger('')
         self._symbol_to_id = {c: i for i, c in enumerate(symbols)}
+        #print(self._symbol_to_id)
         self._id_to_symbol = {i: c for i, c in enumerate(symbols)}
         self._rootdir = rootdir
         self._speaker = "tsuchiya"
