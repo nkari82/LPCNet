@@ -92,7 +92,7 @@ void run_sample_network(NNetState *net, NNetModel *model, float *pdf, const floa
     compute_sparse_gru(&model->sparse_gru_a, net->gru_a_state, gru_a_input);
     RNN_COPY(in_b, net->gru_a_state, GRU_A_STATE_SIZE);
     RNN_COPY(gru_b_input, gru_b_condition, 3*GRU_B_STATE_SIZE);
-	compute_gruB2(&gru_b, gru_b_input, net->gru_b_state, in_b);
+	compute_gruB2(&model->gru_b, gru_b_input, net->gru_b_state, in_b);
     compute_mdense(&model->dual_fc, pdf, net->gru_b_state);
 }
 
@@ -230,6 +230,7 @@ LPCNET_EXPORT int lpcnet_load(LPCNetState *lpcnet, const char* path)
 	read_embaded_layer(&model->gru_a_embed_pred, file);
 	read_embaded_layer(&model->gru_a_embed_exc, file);
 	read_dense_layer(&model->gru_a_dense_feature, file);
+    read_dense_layer(&model->gru_b_dense_feature, file);
 	read_embaded_layer(&model->embed_pitch, file);
 	read_conv1d_layer(&model->feature_conv1, file);
 	read_conv1d_layer(&model->feature_conv2, file);
@@ -268,6 +269,8 @@ LPCNET_EXPORT void lpcnet_unload(LPCNetState *lpcnet)
 	free((void*)model->gru_a_embed_exc.embedding_weights);
 	free((void*)model->gru_a_dense_feature.input_weights);
 	free((void*)model->gru_a_dense_feature.bias);
+	free((void*)model->gru_b_dense_feature.input_weights);
+	free((void*)model->gru_b_dense_feature.bias);
 	free((void*)model->embed_pitch.embedding_weights);
 	free((void*)model->feature_conv1.bias);
 	free((void*)model->feature_conv1.input_weights);

@@ -110,7 +110,7 @@ def dump_gru_layer(self, f):
     name = self.name
     print("printing layer " + name + " of type " + self.__class__.__name__)
     weights = self.get_weights()
-    printVector(f, weights[0], name + '_weights')
+    printVector(f, weights[0][:model.rnn_units1,:], name + '_weights')
     printVector(f, weights[1], name + '_recurrent_weights')
     printVector(f, weights[-1], name + '_bias')
     if hasattr(self, 'activation'):
@@ -196,6 +196,9 @@ W = model.get_layer('gru_a').get_weights()[0][3*embed_size:,:]
 #FIXME: dump only half the biases
 b = model.get_layer('gru_a').get_weights()[2]
 dump_dense_layer_impl('gru_a_dense_feature', W, b, 'LINEAR', bf)
+W = model.get_layer('gru_b').get_weights()[0][model.rnn_units1:,:]
+b = model.get_layer('gru_b').get_weights()[2]
+dump_dense_layer_impl('gru_b_dense_feature', W, b, 'LINEAR', bf)
 
 for i, layer in enumerate(model.layers):
     layer.dump_layer(bf)

@@ -151,6 +151,7 @@ typedef struct {
 	EmbeddingLayer gru_a_embed_pred;
 	EmbeddingLayer gru_a_embed_exc;
 	DenseLayer gru_a_dense_feature;
+	DenseLayer gru_b_dense_feature;
 	EmbeddingLayer embed_pitch;
 	Conv1DLayer feature_conv1;
 	Conv1DLayer feature_conv2;
