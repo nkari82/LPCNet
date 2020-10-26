@@ -63,8 +63,8 @@ void run_frame_network(LPCNetState *lpcnet, float *condition, float *gru_a_condi
     float dense1_out[FEATURE_DENSE1_OUT_SIZE];
     net = &lpcnet->nnet;
 	model = lpcnet->model;
-    RNN_COPY(in, features, 22);
-    compute_embedding(&model->embed_pitch, &in[22], pitch);
+    RNN_COPY(in, features, NB_FEATURES);
+    compute_embedding(&model->embed_pitch, &in[NB_FEATURES], pitch);
     compute_conv1d(&model->feature_conv1, conv1_out, net->feature_conv1_state, in);
     if (lpcnet->frame_count < FEATURE_CONV1_DELAY) RNN_CLEAR(conv1_out, FEATURE_CONV1_OUT_SIZE);
     compute_conv1d(&model->feature_conv2, conv2_out, net->feature_conv2_state, conv1_out);
@@ -140,10 +140,10 @@ LPCNET_EXPORT int lpcnet_synthesize(LPCNetState *lpcnet, const float *features, 
 	model = lpcnet->model;
 	if (!model) return -1;
     /* Matches the Python code -- the 0.1 avoids rounding issues. */
-    pitch = (int)floor(.1 + 50*features[18]+100);
+    pitch = (int)floor(.1 + 50*features[36]+100);
     pitch_gain = lpcnet->old_gain[FEATURES_DELAY-1];
     memmove(&lpcnet->old_gain[1], &lpcnet->old_gain[0], (FEATURES_DELAY-1)*sizeof(lpcnet->old_gain[0]));
-    lpcnet->old_gain[0] = features[19];
+    lpcnet->old_gain[0] = features[PITCH_GAIN_FEATURE];
     run_frame_network(lpcnet, condition, gru_a_condition, gru_b_condition, features, pitch);
     memcpy(lpc, lpcnet->old_lpc[FEATURES_DELAY-1], LPC_ORDER*sizeof(lpc[0]));
     memmove(lpcnet->old_lpc[1], lpcnet->old_lpc[0], (FEATURES_DELAY-1)*LPC_ORDER*sizeof(lpc[0]));
