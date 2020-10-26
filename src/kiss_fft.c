@@ -515,7 +515,7 @@ void opus_fft_free(const kiss_fft_state *cfg, int arch)
 
 #endif /* CUSTOM_MODES */
 
-void opus_fft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout)
+void _opus_fft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout)
 {
     int m2, m;
     int p;
@@ -563,7 +563,7 @@ void opus_fft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout)
     }
 }
 
-void opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *fout)
+void _opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *fout)
 {
    int i;
    opus_val16 scale;
@@ -586,7 +586,7 @@ void opus_fft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *f
 }
 
 
-void opus_ifft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *fout)
+void _opus_ifft_c(const kiss_fft_state *st,const kiss_fft_cpx *fin,kiss_fft_cpx *fout)
 {
    int i;
    celt_assert2 (fin != fout, "In-place FFT not supported");

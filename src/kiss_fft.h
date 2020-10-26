@@ -142,10 +142,10 @@ kiss_fft_state *opus_fft_alloc(int nfft,void * mem,size_t * lenmem, int arch);
  * Note that each element is complex and can be accessed like
     f[k].r and f[k].i
  * */
-void opus_fft_c(const kiss_fft_state *cfg,const kiss_fft_cpx *fin,kiss_fft_cpx *fout);
-void opus_ifft_c(const kiss_fft_state *cfg,const kiss_fft_cpx *fin,kiss_fft_cpx *fout);
+void _opus_fft_c(const kiss_fft_state *cfg,const kiss_fft_cpx *fin,kiss_fft_cpx *fout);
+void _opus_ifft_c(const kiss_fft_state *cfg,const kiss_fft_cpx *fin,kiss_fft_cpx *fout);
 
-void opus_fft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout);
+void _opus_fft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout);
 void opus_ifft_impl(const kiss_fft_state *st,kiss_fft_cpx *fout);
 
 void opus_fft_free(const kiss_fft_state *cfg, int arch);
