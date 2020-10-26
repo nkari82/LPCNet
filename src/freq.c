@@ -228,7 +228,7 @@ float lpc_from_bands(float *lpc, const float *Ex)
    ac[0] += ac[0]*1e-4 + 320/12/38.;
    /* Lag windowing. */
    for (i=1;i<LPC_ORDER+1;i++) ac[i] *= (1 - 6e-5*i*i);
-   e = _celt_lpc(lpc, rc, ac, LPC_ORDER);
+   e = celt_lpc(lpc, rc, ac, LPC_ORDER);
    return e;
 }
 

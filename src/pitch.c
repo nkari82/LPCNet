@@ -146,7 +146,7 @@ static void celt_fir5(const opus_val16 *x,
 }
 
 
-void pitch_downsample(opus_val16 *x_lp,
+void _pitch_downsample(opus_val16 *x_lp,
       int len)
 {
    int i;
@@ -157,7 +157,7 @@ void pitch_downsample(opus_val16 *x_lp,
    opus_val16 lpc2[5];
    opus_val16 c1 = QCONST16(.8f,15);
 
-   _celt_autocorr(x_lp, ac, NULL, 0,
+   celt_autocorr(x_lp, ac, NULL, 0,
                   4, len);
 
    /* Noise floor -40 dB */
@@ -178,7 +178,7 @@ void pitch_downsample(opus_val16 *x_lp,
 #endif
    }
 
-   _celt_lpc(lpc, rc, ac, 4);
+   celt_lpc(lpc, rc, ac, 4);
    for (i=0;i<4;i++)
    {
       tmp = MULT16_16_Q15(QCONST16(.9f,15), tmp);
@@ -258,7 +258,7 @@ void celt_pitch_xcorr(const opus_val16 *_x, const opus_val16 *_y,
 #endif
 }
 
-void pitch_search(const opus_val16 *x_lp, opus_val16 *y,
+void _pitch_search(const opus_val16 *x_lp, opus_val16 *y,
                   int len, int max_pitch, int *pitch)
 {
    int i, j;
@@ -410,7 +410,7 @@ static opus_val16 compute_pitch_gain(opus_val32 xy, opus_val32 xx, opus_val32 yy
 #endif
 
 static const int second_check[16] = {0, 0, 3, 2, 3, 2, 5, 2, 3, 2, 3, 2, 5, 2, 3, 2};
-opus_val16 remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
+opus_val16 _remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
       int N, int *T0_, int prev_period, opus_val16 prev_gain)
 {
    int k, i, T, T0;

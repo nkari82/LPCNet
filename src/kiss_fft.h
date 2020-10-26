@@ -188,10 +188,10 @@ extern void (*const OPUS_IFFT[OPUS_ARCHMASK+1])(const kiss_fft_state *cfg,
          ((void)(arch), opus_fft_free_arch_c(_st))
 
 #define opus_fft(_cfg, _fin, _fout, arch) \
-         ((void)(arch), opus_fft_c(_cfg, _fin, _fout))
+         ((void)(arch), _opus_fft_c(_cfg, _fin, _fout))
 
 #define opus_ifft(_cfg, _fin, _fout, arch) \
-         ((void)(arch), opus_ifft_c(_cfg, _fin, _fout))
+         ((void)(arch), _opus_ifft_c(_cfg, _fin, _fout))
 
 #endif /* end if defined(OPUS_HAVE_RTCD) && (defined(HAVE_ARM_NE10)) */
 #endif /* end if !defined(OVERRIDE_OPUS_FFT) */

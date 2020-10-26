@@ -38,13 +38,13 @@
 //#include "cpu_support.h"
 #include "arch.h"
 
-void pitch_downsample(opus_val16 *x_lp,
+void _pitch_downsample(opus_val16 *x_lp,
       int len);
 
-void pitch_search(const opus_val16 *x_lp, opus_val16 *y,
+void _pitch_search(const opus_val16 *x_lp, opus_val16 *y,
                   int len, int max_pitch, int *pitch);
 
-opus_val16 remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
+opus_val16 _remove_doubling(opus_val16 *x, int maxperiod, int minperiod,
       int N, int *T0, int prev_period, opus_val16 prev_gain);
 
 
